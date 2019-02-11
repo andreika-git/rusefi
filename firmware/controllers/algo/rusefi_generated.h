@@ -976,8 +976,8 @@
 #define useAdvanceCorrectionsForCranking_offset_hex 5cc
 #define useTPSAdvanceTable_offset 1484
 #define useTPSAdvanceTable_offset_hex 5cc
-#define unused_1484_bit_20_offset 1484
-#define unused_1484_bit_20_offset_hex 5cc
+#define useTPSVETable_offset 1484
+#define useTPSVETable_offset_hex 5cc
 #define unused_1484_bit_21_offset 1484
 #define unused_1484_bit_21_offset_hex 5cc
 #define engineChartSize_offset 1488

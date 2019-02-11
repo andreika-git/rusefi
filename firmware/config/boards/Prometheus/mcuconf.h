@@ -42,11 +42,11 @@
 #define STM32_SERIAL_USE_USART3             FALSE
 
 #undef STM32_SERIAL_USE_UART4
-#if TS_UART_DMA_MODE
+//#if TS_UART_DMA_MODE
 #define STM32_SERIAL_USE_UART4              FALSE
-#else
-#define STM32_SERIAL_USE_UART4              TRUE
-#endif
+//#else
+//#define STM32_SERIAL_USE_UART4              TRUE
+//#endif
 
 #undef STM32_UART_USE_USART3
 #define STM32_UART_USE_USART3               FALSE

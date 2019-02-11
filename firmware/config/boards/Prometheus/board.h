@@ -1604,22 +1604,22 @@
                                      PIN_ODR_HIGH(GPIOK_PIN13) |            \
                                      PIN_ODR_HIGH(GPIOK_PIN14) |            \
                                      PIN_ODR_HIGH(GPIOK_PIN15))
-#define VAL_GPIOK_AFRL              (PIN_AFIO_AF(GPIOK_PIN0, 0) |           \
-                                     PIN_AFIO_AF(GPIOK_PIN1, 0) |           \
-                                     PIN_AFIO_AF(GPIOK_PIN2, 0) |           \
-                                     PIN_AFIO_AF(GPIOK_LED4, 0) |           \
-                                     PIN_AFIO_AF(GPIOK_PIN4, 0) |           \
-                                     PIN_AFIO_AF(GPIOK_PIN5, 0) |           \
-                                     PIN_AFIO_AF(GPIOK_PIN6, 0) |           \
-                                     PIN_AFIO_AF(GPIOK_PIN7, 0))
-#define VAL_GPIOK_AFRH              (PIN_AFIO_AF(GPIOK_PIN8, 0) |           \
-                                     PIN_AFIO_AF(GPIOK_PIN9, 0) |           \
-                                     PIN_AFIO_AF(GPIOK_PIN10, 0) |          \
-                                     PIN_AFIO_AF(GPIOK_PIN11, 0) |          \
-                                     PIN_AFIO_AF(GPIOK_PIN12, 0) |          \
-                                     PIN_AFIO_AF(GPIOK_PIN13, 0) |          \
-                                     PIN_AFIO_AF(GPIOK_PIN14, 0) |          \
-                                     PIN_AFIO_AF(GPIOK_PIN15, 0))
+#define VAL_GPIOK_AFRL              (PIN_AFIO_AF(GPIOK_PIN0, 0U) |          \
+                                     PIN_AFIO_AF(GPIOK_PIN1, 0U) |          \
+                                     PIN_AFIO_AF(GPIOK_PIN2, 0U) |          \
+                                     PIN_AFIO_AF(GPIOK_PIN3, 0U) |          \
+                                     PIN_AFIO_AF(GPIOK_PIN4, 0U) |          \
+                                     PIN_AFIO_AF(GPIOK_PIN5, 0U) |          \
+                                     PIN_AFIO_AF(GPIOK_PIN6, 0U) |          \
+                                     PIN_AFIO_AF(GPIOK_PIN7, 0U))
+#define VAL_GPIOK_AFRH              (PIN_AFIO_AF(GPIOK_PIN8, 0U) |          \
+                                     PIN_AFIO_AF(GPIOK_PIN9, 0U) |          \
+                                     PIN_AFIO_AF(GPIOK_PIN10, 0U) |         \
+                                     PIN_AFIO_AF(GPIOK_PIN11, 0U) |         \
+                                     PIN_AFIO_AF(GPIOK_PIN12, 0U) |         \
+                                     PIN_AFIO_AF(GPIOK_PIN13, 0U) |         \
+                                     PIN_AFIO_AF(GPIOK_PIN14, 0U) |         \
+                                     PIN_AFIO_AF(GPIOK_PIN15, 0U))
 
 #if !defined(_FROM_ASM_)
 #ifdef __cplusplus

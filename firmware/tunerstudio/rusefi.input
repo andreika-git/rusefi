@@ -1274,6 +1274,7 @@ cmd_set_engine_type_Miata_NA2            = "w\x00\x30\x00\x2F"
 		field = "Mode",							injectionMode, {isInjectionEnabled == 1}
 		field = "#Batch injection with individual wiring"
 		field = "Two wire batch emulation",				twoWireBatchInjection, {isInjectionEnabled == 1 && injectionMode == 2}
+		field = "Use TPS-based VE Table",	useTPSVETable, {isInjectionEnabled == 1 && fuelAlgorithm == LM_SPEED_DENSITY}
 
 	dialog = ignitionSettings, "Ignition Settings"
 		field = "Enabled",						isIgnitionEnabled

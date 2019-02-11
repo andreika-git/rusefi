@@ -1,5 +1,5 @@
 @echo off
-rm -rf .dep/
+rem rm -rf .dep/
 
 rm -rf build\rusefi.hex
 rm -rf build\rusefi.bin

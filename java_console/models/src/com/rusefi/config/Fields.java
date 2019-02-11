@@ -1,6 +1,6 @@
 package com.rusefi.config;
 
-// this file was generated automatically by ConfigDefinition.jar based on rusefi_config.txt Sun Feb 10 20:05:25 EST 2019
+// this file was generated automatically by ConfigDefinition.jar based on rusefi_config.txt Mon Feb 11 23:47:09 EET 2019
 public class Fields {
 	public static final int LE_COMMAND_LENGTH = 200;
 	public static final int BLOCKING_FACTOR = 400;
@@ -659,7 +659,7 @@ public class Fields {
 	public static final int useSeparateAdvanceForCranking_offset = 1484;
 	public static final int useAdvanceCorrectionsForCranking_offset = 1484;
 	public static final int useTPSAdvanceTable_offset = 1484;
-	public static final int unused_1484_bit_20_offset = 1484;
+	public static final int useTPSVETable_offset = 1484;
 	public static final int unused_1484_bit_21_offset = 1484;
 	public static final int engineChartSize_offset = 1488;
 	public static final int idlePidRpmUpperLimit_offset = 1492;
@@ -1635,7 +1635,7 @@ public class Fields {
 	public static final Field USESEPARATEADVANCEFORCRANKING = Field.create("USESEPARATEADVANCEFORCRANKING", 1484, FieldType.BIT, 17);
 	public static final Field USEADVANCECORRECTIONSFORCRANKING = Field.create("USEADVANCECORRECTIONSFORCRANKING", 1484, FieldType.BIT, 18);
 	public static final Field USETPSADVANCETABLE = Field.create("USETPSADVANCETABLE", 1484, FieldType.BIT, 19);
-	public static final Field UNUSED_1484_BIT_20 = Field.create("UNUSED_1484_BIT_20", 1484, FieldType.BIT, 20);
+	public static final Field USETPSVETABLE = Field.create("USETPSVETABLE", 1484, FieldType.BIT, 20);
 	public static final Field UNUSED_1484_BIT_21 = Field.create("UNUSED_1484_BIT_21", 1484, FieldType.BIT, 21);
 	public static final Field ENGINECHARTSIZE = Field.create("ENGINECHARTSIZE", 1488, FieldType.INT);
 	public static final Field IDLEPIDRPMUPPERLIMIT = Field.create("IDLEPIDRPMUPPERLIMIT", 1492, FieldType.INT);

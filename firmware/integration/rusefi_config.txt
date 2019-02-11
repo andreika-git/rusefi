@@ -699,7 +699,7 @@ bit useFixedBaroCorrFromMap
 bit useSeparateAdvanceForCranking
 bit useAdvanceCorrectionsForCranking
 bit useTPSAdvanceTable
-bit unused_1484_bit_20
+bit useTPSVETable
 bit unused_1484_bit_21
 
 	uint32_t engineChartSize;;"count",      1,      0,       0, 300,      0

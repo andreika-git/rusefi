@@ -23,11 +23,14 @@
 #define HAL_USE_SERIAL FALSE
 
 #undef HAL_USE_UART
-#if TS_UART_DMA_MODE
+//#if TS_UART_DMA_MODE
 #define HAL_USE_UART TRUE
-#else
-#define HAL_USE_UART FALSE
-#endif
+//#else
+//#define HAL_USE_UART FALSE
+//#endif
+
+#undef UART_USE_WAIT
+#define UART_USE_WAIT TRUE
 
 #undef HAL_USE_USB
 #define HAL_USE_USB FALSE

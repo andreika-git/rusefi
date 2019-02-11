@@ -1,4 +1,4 @@
-// this section was generated automatically by ConfigDefinition.jar based on rusefi_config.txt Sun Feb 10 20:05:25 EST 2019
+// this section was generated automatically by ConfigDefinition.jar based on rusefi_config.txt Mon Feb 11 23:47:09 EET 2019
 // begin
 #ifndef ENGINE_CONFIGURATION_GENERATED_H_
 #define ENGINE_CONFIGURATION_GENERATED_H_
@@ -1466,7 +1466,7 @@ typedef struct {
 	bool useTPSAdvanceTable : 1;
 	/**
 	offset 1484 bit 20 */
-	bool unused_1484_bit_20 : 1;
+	bool useTPSVETable : 1;
 	/**
 	offset 1484 bit 21 */
 	bool unused_1484_bit_21 : 1;
@@ -2481,4 +2481,4 @@ typedef struct {
 
 #endif
 // end
-// this section was generated automatically by ConfigDefinition.jar based on rusefi_config.txt Sun Feb 10 20:05:25 EST 2019
+// this section was generated automatically by ConfigDefinition.jar based on rusefi_config.txt Mon Feb 11 23:47:09 EET 2019
