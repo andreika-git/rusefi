@@ -1,6 +1,6 @@
 // this https://en.wikipedia.org/wiki/Reverse_Polish_notation is generated automatically
 // from controllers/system_fsio.txt
-// on 2019-09-08_16_41_20_788
+// on 2020-07-07_19_02_00_108
 //
 //
 // in this file we define system FSIO expressions
@@ -16,8 +16,8 @@
 // Human-readable: (fan and (coolant > cfg_fanOffTemperature)) | (coolant > cfg_fanOnTemperature) | is_clt_broken
 #define FAN_CONTROL_LOGIC "fan coolant cfg_fanOffTemperature > and coolant cfg_fanOnTemperature > | is_clt_broken |"
 
-// Human-readable: (time_since_boot < startup_fuel_pump_duration) | (rpm > 0)
-#define FUEL_PUMP_LOGIC "time_since_boot startup_fuel_pump_duration < rpm 0 > |"
+// Human-readable: (time_since_boot >= 0 & time_since_boot < startup_fuel_pump_duration) | (rpm > 0)
+#define FUEL_PUMP_LOGIC "time_since_boot 0 time_since_boot & >= startup_fuel_pump_duration < rpm 0 > |"
 
 // Human-readable: vbatt < 14.5
 #define ALTERNATOR_LOGIC "vbatt 14.5 <"
@@ -25,8 +25,7 @@
 // Human-readable: coolant > 120
 #define TOO_HOT_LOGIC "coolant 120 >"
 
-// Human-readable: ac_on_switch & rpm > 850 & time_since_ac_on_switch > 0.3
-// ac_on_switch rpm & 850 time_since_ac_on_switch & > 0.3 >
+// Human-readable: ac_on_switch & rpm > 850
 #define AC_RELAY_LOGIC "ac_on_switch rpm & 850 >"
 // Combined RPM, CLT and VBATT warning light
 
@@ -34,8 +33,9 @@
 #define COMBINED_WARNING_LIGHT "rpm 2 fsio_setting > coolant 3 fsio_setting > vbatt 4 fsio_setting < | |"
 //needed by EFI_MAIN_RELAY_CONTROL
 
-// Human-readable: (time_since_boot < 2) | (vbatt > 5) | in_shutdown
-#define MAIN_RELAY_LOGIC "time_since_boot 2 < vbatt 5 > | in_shutdown |"
+//MAIN_RELAY_LOGIC=(time_since_boot >= 0 & time_since_boot < 2) | (vbatt > 5) | in_shutdown
+// Human-readable: (vbatt > 5) | in_shutdown
+#define MAIN_RELAY_LOGIC "vbatt 5 > in_shutdown |"
 // could be used for simple variable intake geometry setups or warning light or starter block
 
 // Human-readable: rpm > fsio_setting(1)
@@ -73,5 +73,5 @@
 // Human-readable: fsio_table (3, rpm, map) / 100
 #define BOOST_CONTROLLER "3 rpm map fsio_table 100 /"
 
-// Human-readable: if (fsio_setting (0) > 20, 0, 10)
-#define ANALOG_CONDITION "0 fsio_setting 20 > 0 10 if"
+// Human-readable: if(fsio_input (0) > 20, 0, 10)
+#define ANALOG_CONDITION "0 fsio_input 20 > 0 10 if"

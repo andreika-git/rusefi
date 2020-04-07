@@ -1,8 +1,9 @@
 <component name="ProjectRunConfigurationManager">
-  <configuration default="false" name="Launcher COM10" type="Application" factoryName="Application" folderName="1x">
+  <configuration default="false" name="Launcher COM45" type="Application" factoryName="Application" folderName="1x">
     <option name="MAIN_CLASS_NAME" value="com.rusefi.Launcher" />
     <module name="ui" />
-    <option name="PROGRAM_PARAMETERS" value="COM10" />
+    <option name="PROGRAM_PARAMETERS" value="COM45" />
+    <option name="WORKING_DIRECTORY" value="$PROJECT_DIR$/../../../../../bin/rusefi_console" />
     <RunnerSettings RunnerId="Debug">
       <option name="DEBUG_PORT" value="" />
       <option name="TRANSPORT" value="0" />
