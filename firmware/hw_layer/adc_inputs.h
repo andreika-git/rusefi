@@ -43,6 +43,15 @@ void removeChannel(const char *name, adc_channel_e setting);
 // max(ADC_BUF_DEPTH_SLOW, ADC_BUF_DEPTH_FAST)
 #define MAX_ADC_GRP_BUF_DEPTH 8
 
+/* Depth of the conversion buffer, channels are sampled X times each.*/
+#ifndef ADC_BUF_DEPTH_SLOW
+#define ADC_BUF_DEPTH_SLOW      8
+#endif /* ADC_BUF_DEPTH_SLOW */
+
+#ifndef ADC_BUF_DEPTH_FAST
+#define ADC_BUF_DEPTH_FAST      4
+#endif /* ADC_BUF_DEPTH_FAST */
+
 #define getAdcValue(msg, hwChannel) getInternalAdcValue(msg, hwChannel)
 
 // todo: migrate to adcToVoltageInputDividerCoefficient

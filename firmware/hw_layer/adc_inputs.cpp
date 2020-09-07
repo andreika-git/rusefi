@@ -38,10 +38,6 @@
 #include "maf.h"
 #include "perf_trace.h"
 
-/* Depth of the conversion buffer, channels are sampled X times each.*/
-#define ADC_BUF_DEPTH_SLOW      8
-#define ADC_BUF_DEPTH_FAST      4
-
 //static Biquad biq[ADC_MAX_CHANNELS_COUNT];
 
 static adc_channel_mode_e adcHwChannelEnabled[HW_MAX_ADC_INDEX];
@@ -68,20 +64,24 @@ AdcDevice::AdcDevice(ADCConversionGroup* hwConfig) {
 	hwConfig->sqr1 = 0;
 	hwConfig->sqr2 = 0;
 	hwConfig->sqr3 = 0;
+#if ADC_MAX_CHANNELS_COUNT > 16
+	hwConfig->sqr4 = 0;
+	hwConfig->sqr5 = 0;
+#endif /* ADC_MAX_CHANNELS_COUNT */
 	memset(hardwareIndexByIndernalAdcIndex, 0, sizeof(hardwareIndexByIndernalAdcIndex));
 	memset(internalAdcIndexByHardwareIndex, 0xFFFFFFFF, sizeof(internalAdcIndexByHardwareIndex));
 }
 
-#if !defined(PWM_FREQ_FAST) || !defined(PWM_PERIOD_FAST)
+#if !defined(GPT_FREQ_FAST) || !defined(GPT_PERIOD_FAST)
 /**
  * 8000 RPM is 133Hz
  * If we want to sample MAP once per 5 degrees we need 133Hz * (360 / 5) = 9576Hz of fast ADC
  */
 // todo: migrate to continues ADC mode? probably not - we cannot afford the callback in
 // todo: continues mode. todo: look into our options
-#define PWM_FREQ_FAST 100000   /* PWM clock frequency. I wonder what does this setting mean?  */
-#define PWM_PERIOD_FAST 10  /* PWM period (in PWM ticks).    */
-#endif /* PWM_FREQ_FAST PWM_PERIOD_FAST */
+#define GPT_FREQ_FAST 100000   /* GPT clock frequency. I wonder what does this setting mean?  */
+#define GPT_PERIOD_FAST 10  /* GPT period (in GPT ticks).    */
+#endif /* GPT_FREQ_FAST GPT_PERIOD_FAST */
 
 // is there a reason to have this configurable at runtime?
 #ifndef ADC_SLOW_DEVICE
@@ -153,7 +153,11 @@ ADC_TwoSamplingDelay_20Cycles,   // cr1
 
 		0, // Conversion group sequence 13...16 + sequence length
 		0, // Conversion group sequence 7...12
-		0  // Conversion group sequence 1...6
+		0, // Conversion group sequence 1...6
+#if ADC_MAX_CHANNELS_COUNT > 16
+		0, // Conversion group sequence 19...24
+		0  // Conversion group sequence 25...30
+#endif /* ADC_MAX_CHANNELS_COUNT */
 		};
 
 AdcDevice slowAdc(&adcgrpcfgSlow);
@@ -194,20 +198,20 @@ ADC_TwoSamplingDelay_5Cycles,   // cr1
 		0, // Conversion group sequence 13...16 + sequence length
 
 		0, // Conversion group sequence 7...12
-		0
-
-// Conversion group sequence 1...6
+		0, // Conversion group sequence 1...6
+#if ADC_MAX_CHANNELS_COUNT > 16
+		0, // Conversion group sequence 19...24
+		0  // Conversion group sequence 25...30
+#endif /* ADC_MAX_CHANNELS_COUNT */
 		};
 
 AdcDevice fastAdc(&adcgrpcfg_fast);
 
-#if HAL_USE_PWM
+#if HAL_USE_GPT
+static void fast_adc_callback(GPTDriver *) {
 
-static void pwmpcb_fast(PWMDriver *pwmp) {
-	efiAssertVoid(CUSTOM_ERR_6659, getCurrentRemainingStack()> 32, "lwStAdcFast");
+
 #if EFI_INTERNAL_ADC
-	(void) pwmp;
-
 	/*
 	 * Starts an asynchronous ADC conversion operation, the conversion
 	 * will be executed in parallel to the current PWM cycle and will
@@ -218,10 +222,16 @@ static void pwmpcb_fast(PWMDriver *pwmp) {
 	if (ADC_FAST_DEVICE.state != ADC_READY &&
 	ADC_FAST_DEVICE.state != ADC_COMPLETE &&
 	ADC_FAST_DEVICE.state != ADC_ERROR) {
+
 		fastAdc.errorsCount++;
 		// todo: when? why? firmwareError(OBD_PCM_Processor_Fault, "ADC fast not ready?");
+#if 0
+		// otherwise the ADC driver may be stuck in 'ADC_ACTIVE' state
+		adcStopConversionI(&ADC_FAST_DEVICE);
+#endif
 		chSysUnlockFromISR()
 		;
+
 		return;
 	}
 
@@ -229,9 +239,10 @@ static void pwmpcb_fast(PWMDriver *pwmp) {
 	chSysUnlockFromISR()
 	;
 	fastAdc.conversionCount++;
+
 #endif /* EFI_INTERNAL_ADC */
 }
-#endif /* HAL_USE_PWM */
+#endif /* HAL_USE_GPT */
 
 float getMCUInternalTemperature(void) {
 #if defined(ADC_CHANNEL_SENSOR)
@@ -272,12 +283,12 @@ int getInternalAdcValue(const char *msg, adc_channel_e hwChannel) {
 	return slowAdc.getAdcValueByHwChannel(hwChannel);
 }
 
-#if HAL_USE_PWM
-static PWMConfig pwmcfg_fast = { PWM_FREQ_FAST, PWM_PERIOD_FAST, pwmpcb_fast, { {
-PWM_OUTPUT_DISABLED, NULL }, { PWM_OUTPUT_DISABLED, NULL }, {
-PWM_OUTPUT_DISABLED, NULL }, { PWM_OUTPUT_DISABLED, NULL } },
-/* HW dependent part.*/
-0, 0 };
+#if HAL_USE_GPT
+static GPTConfig fast_adc_config = {
+	GPT_FREQ_FAST,
+	fast_adc_callback,
+	0, 0
+};
 #endif /* HAL_USE_PWM */
 
 static void initAdcPin(brain_pin_e pin, const char *msg) {
@@ -350,10 +361,17 @@ void AdcDevice::enableChannel(adc_channel_e hwChannel) {
 		hwConfig->sqr3 += (hwChannel) << (5 * logicChannel);
 	} else if (logicChannel < 12) {
 		hwConfig->sqr2 += (hwChannel) << (5 * (logicChannel - 6));
-	} else {
+	} else if (logicChannel < 18) {
 		hwConfig->sqr1 += (hwChannel) << (5 * (logicChannel - 12));
 	}
-	// todo: support for more then 12 channels? not sure how needed it would be
+#if ADC_MAX_CHANNELS_COUNT > 16
+	else if (logicChannel < 24) {
+		hwConfig->sqr4 += (hwChannel) << (5 * (logicChannel - 18));
+	}
+	else if (logicChannel < 30) {
+		hwConfig->sqr5 += (hwChannel) << (5 * (logicChannel - 24));
+	}
+#endif /* ADC_MAX_CHANNELS_COUNT */
 }
 
 void AdcDevice::enableChannelAndPin(adc_channel_e hwChannel) {
@@ -402,6 +420,10 @@ static void setAdcDebugReporting(int value) {
 }
 
 void waitForSlowAdc(int lastAdcCounter) {
+	// don't halt the firmware if there are no slow channels assigned
+	if (slowAdc.size() < 1)
+		return;
+
 	// we use slowAdcCounter instead of slowAdc.conversionCount because we need ADC_COMPLETE state
 	// todo: use sync.objects?
 	while (slowAdcCounter <= lastAdcCounter) {
@@ -546,7 +568,7 @@ static void configureInputs(void) {
 static SlowAdcController slowAdcController;
 
 void initAdcInputs() {
-	printMsg(&logger, "initAdcInputs()");
+	scheduleMsg(&logger, "initAdcInputs()");
 	if (ADC_BUF_DEPTH_FAST > MAX_ADC_GRP_BUF_DEPTH)
 		firmwareError(CUSTOM_ERR_ADC_DEPTH_FAST, "ADC_BUF_DEPTH_FAST too high");
 	if (ADC_BUF_DEPTH_SLOW > MAX_ADC_GRP_BUF_DEPTH)
@@ -593,15 +615,17 @@ void initAdcInputs() {
 		/*
 		 * Initializes the PWM driver.
 		 */
-#if HAL_USE_PWM
-		pwmStart(EFI_INTERNAL_FAST_ADC_PWM, &pwmcfg_fast);
-		pwmEnablePeriodicNotification(EFI_INTERNAL_FAST_ADC_PWM);
-#endif /* HAL_USE_PWM */
+#if HAL_USE_GPT
+		gptStart(EFI_INTERNAL_FAST_ADC_GPT, &fast_adc_config);
+		gptStartContinuous(EFI_INTERNAL_FAST_ADC_GPT, GPT_PERIOD_FAST);
+#endif /* HAL_USE_GPT */
 	}
+
+	scheduleMsg(&logger, "ADC enabled: (%d slow) (%d fast)", slowAdc.size(), fastAdc.size());
 
 	addConsoleActionI("adc", (VoidInt) printAdcValue);
 #else
-	printMsg(&logger, "ADC disabled");
+	scheduleMsg(&logger, "ADC disabled");
 #endif
 }
 
