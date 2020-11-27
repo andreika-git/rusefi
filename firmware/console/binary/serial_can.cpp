@@ -15,10 +15,12 @@
 
 #include "serial_can.h"
 
+#if HAL_USE_CAN
+static CanStreamer streamer;
+static CanStreamerState state(&streamer);
+#endif /* HAL_USE_CAN */
 
-static CanStreamerState state;
-
-int CanStreamerState::sendFrame(CANDriver *canp, const IsoTpFrameHeader & header, const uint8_t *data, int num) {
+int CanStreamerState::sendFrame(const IsoTpFrameHeader & header, const uint8_t *data, int num, can_sysinterval_t timeout) {
 	CANTxFrame txmsg;
 	memset(&txmsg, 0, sizeof(txmsg));
 	txmsg.IDE = CAN_IDE_STD;
@@ -64,13 +66,13 @@ int CanStreamerState::sendFrame(CANDriver *canp, const IsoTpFrameHeader & header
 	}
 	
 	// send the frame!
-	if (canTransmit(&CAND1, CAN_ANY_MAILBOX, &txmsg, TIME_MS2I(100)) == MSG_OK)
+	if (streamer->transmit(CAN_ANY_MAILBOX, &txmsg, timeout) == CAN_MSG_OK)
 		return numBytes;
 	return 0;
 }
 
 // returns the number of copied bytes
-int CanStreamerState::receiveFrame(CANDriver *canp, CANRxFrame *rxmsg, uint8_t *buf, int num) {
+int CanStreamerState::receiveFrame(CANRxFrame *rxmsg, uint8_t *buf, int num, can_sysinterval_t timeout) {
 	if (rxmsg == nullptr || rxmsg->DLC < 1)
 		return 0;
 	int frameType = (rxmsg->data8[0] >> 4) & 0xf;
@@ -105,7 +107,7 @@ int CanStreamerState::receiveFrame(CANDriver *canp, CANRxFrame *rxmsg, uint8_t *
 
 #if defined(TS_CAN_DEVICE_SHORT_PACKETS_IN_ONE_FRAME)
 	if (frameType == ISO_TP_FRAME_SINGLE) {
-		srcBuf = state.tmpRxBuf;
+		srcBuf = tmpRxBuf;
 		// restore the CRC on the whole packet
 		uint32_t crc = crc32((void *) (rxmsg->data + 1), numBytesAvailable);
 		// we need a separate buffer for crc because srcBuf may not be word-aligned for direct copy
@@ -142,22 +144,26 @@ int CanStreamerState::receiveFrame(CANDriver *canp, CANRxFrame *rxmsg, uint8_t *
 		header.fcFlag = 0;			// = "continue to send"
 		header.blockSize = 0;		// = the remaining "frames" to be sent without flow control or delay
 		header.separationTime = 0;	// = wait 0 milliseconds, send immediately
-		sendFrame(canp, header, nullptr, 0);
+		sendFrame(header, nullptr, 0, timeout);
 	}
 
 	return numBytesToCopy;
 }
 
-int CanStreamerState::sendDataTimeout(CANDriver *canp, const uint8_t *txbuf, int numBytes, sysinterval_t timeout) {
+int CanStreamerState::sendDataTimeout(const uint8_t *txbuf, int numBytes, can_sysinterval_t timeout) {
 
 	int offset = 0;
-	msg_t ret;
+	can_msg_t ret;
+
+	if (numBytes < 1)
+		return 0;
+
 	// 1 frame
 	if (numBytes <= 7) {
 		IsoTpFrameHeader header;
 		header.frameType = ISO_TP_FRAME_SINGLE;
 		header.numBytes = numBytes;
-		return state.sendFrame(canp, header, txbuf, numBytes);
+		return sendFrame(header, txbuf, numBytes, timeout);
 	}
 
 	// multiple frames
@@ -166,15 +172,15 @@ int CanStreamerState::sendDataTimeout(CANDriver *canp, const uint8_t *txbuf, int
 	IsoTpFrameHeader header;
 	header.frameType = ISO_TP_FRAME_FIRST;
 	header.numBytes = numBytes;
-	int numSent = state.sendFrame(canp, header, txbuf + offset, numBytes);
+	int numSent = sendFrame(header, txbuf + offset, numBytes, timeout);
 	offset += numSent;
 	numBytes -= numSent;
 	int totalNumSent = numSent;
 
 	// get a flow control frame
 	CANRxFrame rxmsg;
-	if (canReceive(&CAND1, CAN_ANY_MAILBOX, &rxmsg, timeout) == MSG_OK) {
-		state.receiveFrame(canp, &rxmsg, nullptr, 0);
+	if (streamer->receive(CAN_ANY_MAILBOX, &rxmsg, timeout) == CAN_MSG_OK) {
+		receiveFrame(&rxmsg, nullptr, 0, timeout);
 	}
 
 	// send the rest of the data
@@ -186,7 +192,7 @@ int CanStreamerState::sendDataTimeout(CANDriver *canp, const uint8_t *txbuf, int
 		header.frameType = ISO_TP_FRAME_CONSECUTIVE;
 		header.index = ((idx++) & 0x0f);
 		header.numBytes = numBytes;
-		int numSent = state.sendFrame(canp, header, txbuf + offset, numBytes);
+		int numSent = sendFrame(header, txbuf + offset, numBytes, timeout);
 		if (numSent < 1)
 			break;
 		totalNumSent += numSent;
@@ -209,60 +215,90 @@ int CanStreamerState::getDataFromFifo(uint8_t *rxbuf, size_t &numBytes) {
 	return i;
 }
 
-void canInit(CANDriver *canp) {
-	chEvtRegister(&CAND1.rxfull_event, &state.el, 0);
-}
-
-msg_t canAddToTxStreamTimeout(CANDriver *canp, size_t *np,
-                        const uint8_t *txbuf, sysinterval_t timeout) {
+can_msg_t CanStreamerState::streamAddToTxTimeout(size_t *np, const uint8_t *txbuf, can_sysinterval_t timeout) {
 	int numBytes = *np;
 	int offset = 0;
-	int minNumBytesRequiredToSend = 7 - state.txFifoBuf.getCount();
+	int minNumBytesRequiredToSend = 7 - txFifoBuf.getCount();
 	while (numBytes >= minNumBytesRequiredToSend) {
-		state.txFifoBuf.put(txbuf + offset, minNumBytesRequiredToSend);
-		int numSent = state.sendDataTimeout(canp, (const uint8_t *)state.txFifoBuf.elements, state.txFifoBuf.getCount(), timeout);
+		txFifoBuf.put(txbuf + offset, minNumBytesRequiredToSend);
+		int numSent = sendDataTimeout((const uint8_t *)txFifoBuf.getElements(), txFifoBuf.getCount(), timeout);
 		if (numSent < 1)
 			break;
-		state.txFifoBuf.clear();
-		offset += numSent;
-		numBytes -= numSent;
+		txFifoBuf.clear();
+		offset += minNumBytesRequiredToSend;
+		numBytes -= minNumBytesRequiredToSend;
 		minNumBytesRequiredToSend = 7;
 	}
 	
 	// now we put the rest on hold
-	state.txFifoBuf.put(txbuf + offset, numBytes);
+	txFifoBuf.put(txbuf + offset, numBytes);
 
-	return MSG_OK;
+	return CAN_MSG_OK;
 }
 
-msg_t canFlushTxStream(CANDriver *canp, sysinterval_t timeout) {
-	int numSent = state.sendDataTimeout(canp, (const uint8_t *)state.txFifoBuf.elements, state.txFifoBuf.getCount(), timeout);
-	state.txFifoBuf.clear();
+can_msg_t CanStreamerState::streamFlushTx(can_sysinterval_t timeout) {
+	int numSent = sendDataTimeout((const uint8_t *)txFifoBuf.getElements(), txFifoBuf.getCount(), timeout);
+	txFifoBuf.clear();
 	
-	return MSG_OK;
+	return CAN_MSG_OK;
 }
 
-msg_t canStreamReceiveTimeout(CANDriver *canp, size_t *np,
-                           uint8_t *rxbuf, sysinterval_t timeout) {
+can_msg_t CanStreamerState::streamReceiveTimeout(size_t *np, uint8_t *rxbuf, can_sysinterval_t timeout) {
 	int i = 0;
 	size_t numBytes = *np;
 	
 	// first, fill the data from the stored buffer (saved from the previous CAN frame)
-	i = state.getDataFromFifo(rxbuf, numBytes);
+	i = getDataFromFifo(rxbuf, numBytes);
 
 	// if even more data is needed, then we receive more CAN frames
 	while (numBytes > 0) {
+#if HAL_USE_CAN
 		if (chEvtWaitAnyTimeout(ALL_EVENTS, timeout) == 0)
-			return MSG_TIMEOUT;
+			return CAN_MSG_TIMEOUT;
+#endif /* HAL_USE_CAN */
+
 		CANRxFrame rxmsg;
-		if (canReceive(&CAND1, CAN_ANY_MAILBOX, &rxmsg, TIME_IMMEDIATE) == MSG_OK) {
-			int numReceived = state.receiveFrame(canp, &rxmsg, rxbuf + i, numBytes);
+		if (streamer->receive(CAN_ANY_MAILBOX, &rxmsg, CAN_TIME_IMMEDIATE) == CAN_MSG_OK) {
+			int numReceived = receiveFrame(&rxmsg, rxbuf + i, numBytes, timeout);
 			if (numReceived < 1)
 				break;
 			numBytes -= numReceived;
 		}
 	}
 	//*np -= numBytes;
-	return MSG_OK;
+	return CAN_MSG_OK;
 }
 
+#if HAL_USE_CAN
+
+void CanStreamer::init(CANDriver *c) {
+	canp = c;
+	chEvtRegister(canp->rxfull_event, &el, 0);
+}
+
+can_msg_t CanStreamer::transmit(canmbx_t mailbox, const CANTxFrame *ctfp, can_sysinterval_t timeout) {
+	return (can_msg_t)canTransmit(canp, mailbox, ctfp, (sysinterval_t)timeout);
+}
+
+can_msg_t CanStreamer::receive(canmbx_t mailbox, CANRxFrame *crfp, can_sysinterval_t timeout) {
+	return (can_msg_t)canReceive(canp, mailbox, ctfp, (sysinterval_t)timeout);
+}
+
+
+void canStreamInit(CANDriver *canp) {
+	streamer.init(canp);
+}
+
+msg_t canStreamAddToTxTimeout(size_t *np, const uint8_t *txbuf, sysinterval_t timeout) {
+	return state.streamAddToTxTimeout(np, txbuf, timeout);
+}
+
+msg_t canStreamFlushTx(sysinterval_t timeout) {
+	return state.streamFlushTx(timeout);
+}
+
+msg_t canStreamReceiveTimeout(size_t *np, uint8_t *rxbuf, sysinterval_t timeout) {
+	return state.streamReceiveTimeout(np, rxbuf, timeout);
+}
+
+#endif /* HAL_USE_CAN */

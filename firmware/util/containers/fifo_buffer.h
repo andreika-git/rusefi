@@ -18,6 +18,11 @@
 // todo: this is not a thread-safe version!
 template<typename T, size_t maxSize = CB_MAX_SIZE>
 class fifo_buffer : public cyclic_buffer<T, maxSize> {
+	using cyclic_buffer<T, maxSize>::add;
+	using cyclic_buffer<T, maxSize>::getSize;
+	using cyclic_buffer<T, maxSize>::elements;
+	using cyclic_buffer<T, maxSize>::size, cyclic_buffer<T, maxSize>::count;
+
 public:
 	fifo_buffer() : currentIndexRead(0) {
 	}
@@ -36,6 +41,14 @@ public:
 		return getCount() >= getSize();
 	}
 
+    int getCount() const {
+        return cyclic_buffer<T, maxSize>::getCount();
+    }
+
+    const volatile T* getElements() const {
+        return elements;
+    }
+
 public:
     volatile int currentIndexRead;	// FIFO "tail"
 };
@@ -44,7 +57,7 @@ template<typename T, size_t maxSize>
 void fifo_buffer<T, maxSize>::put(T item) {
 	// check if full
 	if (!isFull()) {
-		cyclic_buffer::add(item);
+		add(item);
 	}
 }
 
@@ -67,7 +80,7 @@ T fifo_buffer<T, maxSize>::get() {
 
 template<typename T, size_t maxSize>
 void fifo_buffer<T, maxSize>::clear() {
-	cyclic_buffer::clear();
+	cyclic_buffer<T, maxSize>::clear();
 	currentIndexRead = 0;
 }
 

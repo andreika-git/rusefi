@@ -23,13 +23,18 @@ public class PortDetector {
 
     private static final NamedThreadFactory AUTO_DETECT_PORT = new NamedThreadFactory("AutoDetectPort");
 
+    public enum DetectorMode {
+        DETECT_TS,
+        DETECT_ELM327,
+    }
+
     /**
      * Connect to all serial ports and find out which one respond first
      * @param callback
      * @return port name on which rusEFI was detected or null if none
      */
     @Nullable
-    public static String autoDetectSerial(Function<IoStream, Void> callback) {
+    public static String autoDetectSerial(Function<IoStream, Void> callback, PortDetector.DetectorMode mode) {
         String[] serialPorts = getPortNames();
         if (serialPorts.length == 0) {
             log.error("No serial ports detected");
@@ -40,7 +45,7 @@ public class PortDetector {
         CountDownLatch portFound = new CountDownLatch(1);
         AtomicReference<String> result = new AtomicReference<>();
         for (String serialPort : serialPorts) {
-            Thread thread = AUTO_DETECT_PORT.newThread(new SerialAutoChecker(serialPort, portFound, result, callback));
+            Thread thread = AUTO_DETECT_PORT.newThread(new SerialAutoChecker(mode, serialPort, portFound, result, callback));
             serialFinder.add(thread);
             thread.start();
         }
@@ -54,6 +59,10 @@ public class PortDetector {
             thread.interrupt();
 //        FileLog.MAIN.logLine("Returning " + result.get());
         return result.get();
+    }
+
+    public static String autoDetectSerial(Function<IoStream, Void> callback) {
+        return autoDetectSerial(callback, PortDetector.DetectorMode.DETECT_TS);
     }
 
     private static String[] getPortNames() {

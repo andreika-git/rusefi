@@ -110,6 +110,7 @@ void startTsPort(ts_channel_s *tsChannel) {
 
 				canStart(&TS_CAN_DEVICE, &tsCanConfig);
 				canInit(&TS_CAN_DEVICE);
+				canStreamInit(&TS_CAN_DEVICE);
 
 				//tsChannel->channel = (BaseChannel *) &TS_CAN_DEVICE;
 			}
@@ -163,7 +164,7 @@ void sr5WriteData(ts_channel_s *tsChannel, const uint8_t * buffer, int size) {
 #elif defined(TS_CAN_DEVICE)
 	UNUSED(tsChannel);
 	int transferred = size;
-	canAddToTxStreamTimeout(&TS_CAN_DEVICE, (size_t *)&transferred, buffer, BINARY_IO_TIMEOUT);
+	canStreamAddToTxTimeout(&TS_CAN_DEVICE, (size_t *)&transferred, buffer, BINARY_IO_TIMEOUT);
 #endif
 	if (tsChannel->channel == nullptr)
 		return;
@@ -286,7 +287,7 @@ bool sr5IsReady(ts_channel_s *tsChannel) {
 void sr5FlushData(ts_channel_s *tsChannel) {
 #if defined(TS_CAN_DEVICE)
 	UNUSED(tsChannel);
-	canFlushTxStream(&TS_CAN_DEVICE);
+	canStreamFlushTx(&TS_CAN_DEVICE);
 #endif /* TS_CAN_DEVICE */
 }
 
