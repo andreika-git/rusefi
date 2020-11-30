@@ -48,6 +48,12 @@ static LoggingWithStorage logger("CAN driver");
 #define CAN_BTR_250 (CAN_BTR_SJW(0) | CAN_BTR_BRP(11) | CAN_BTR_TS1(14) | CAN_BTR_TS2(1))
 #define CAN_BTR_500 (CAN_BTR_SJW(0) | CAN_BTR_BRP(5)  | CAN_BTR_TS1(14) | CAN_BTR_TS2(1))
 #define CAN_BTR_1k0 (CAN_BTR_SJW(0) | CAN_BTR_BRP(2)  | CAN_BTR_TS1(14) | CAN_BTR_TS2(1))
+#elif ((defined(CYPRESS_CAN_USE_CAN0) || defined(CYPRESS_CAN_USE_CAN1)) && defined(PDL_PERIPHERAL_CANFD_ACTIVE))
+// for Cypress we're using CANFD ("Flexible Data-rate"), so there's no need to specify it anymore
+#define CAN_BTR_100 0
+#define CAN_BTR_250 0
+#define CAN_BTR_500 0
+#define CAN_BTR_1k0 0
 #else
 #error Please define CAN BTR settings for your MCU!
 #endif

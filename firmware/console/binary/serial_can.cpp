@@ -12,7 +12,7 @@
 
 #include "global.h"
 #include "os_access.h"
-
+#include "crc.h"
 #include "serial_can.h"
 
 #if HAL_USE_CAN
@@ -109,7 +109,7 @@ int CanStreamerState::receiveFrame(CANRxFrame *rxmsg, uint8_t *buf, int num, can
 	if (frameType == ISO_TP_FRAME_SINGLE) {
 		srcBuf = tmpRxBuf;
 		// restore the CRC on the whole packet
-		uint32_t crc = crc32((void *) (rxmsg->data + 1), numBytesAvailable);
+		uint32_t crc = crc32((void *) (rxmsg->data8 + 1), numBytesAvailable);
 		// we need a separate buffer for crc because srcBuf may not be word-aligned for direct copy
 		uint8_t crcBuffer[sizeof(uint32_t)];
 		*(uint32_t *) (crcBuffer) = SWAP_UINT32(crc);
@@ -263,6 +263,7 @@ can_msg_t CanStreamerState::streamReceiveTimeout(size_t *np, uint8_t *rxbuf, can
 			if (numReceived < 1)
 				break;
 			numBytes -= numReceived;
+			i += numReceived;
 		}
 	}
 	//*np -= numBytes;
@@ -273,7 +274,7 @@ can_msg_t CanStreamerState::streamReceiveTimeout(size_t *np, uint8_t *rxbuf, can
 
 void CanStreamer::init(CANDriver *c) {
 	canp = c;
-	chEvtRegister(canp->rxfull_event, &el, 0);
+	chEvtRegister(&canp->rxfull_event, &el, 0);
 }
 
 can_msg_t CanStreamer::transmit(canmbx_t mailbox, const CANTxFrame *ctfp, can_sysinterval_t timeout) {
@@ -281,7 +282,7 @@ can_msg_t CanStreamer::transmit(canmbx_t mailbox, const CANTxFrame *ctfp, can_sy
 }
 
 can_msg_t CanStreamer::receive(canmbx_t mailbox, CANRxFrame *crfp, can_sysinterval_t timeout) {
-	return (can_msg_t)canReceive(canp, mailbox, ctfp, (sysinterval_t)timeout);
+	return (can_msg_t)canReceive(canp, mailbox, crfp, (sysinterval_t)timeout);
 }
 
 

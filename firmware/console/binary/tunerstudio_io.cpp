@@ -35,6 +35,7 @@ extern SERIAL_USB_DRIVER TS_USB_DEVICE;
 
 #ifdef TS_CAN_DEVICE
 #include "serial_can.h"
+#include "can_hw.h"
 #endif /* TS_CAN_DEVICE */
 
 
@@ -49,7 +50,9 @@ static UARTConfig tsUartConfig = {
 #elif defined(TS_SERIAL_DEVICE)
 static SerialConfig tsSerialConfig = { .speed = 0, .cr1 = 0, .cr2 = USART_CR2_STOP1_BITS | USART_CR2_LINEN, .cr3 = 0 };
 #elif defined(TS_CAN_DEVICE)
-static CANConfig tsCanConfig = { CAN_MCR_ABOM | CAN_MCR_AWUM | CAN_MCR_TXFP, CAN_BTR_500 };
+// todo: unify with can_hw.cpp
+static const CANConfig canConfig500 = { CAN_MCR_ABOM | CAN_MCR_AWUM | CAN_MCR_TXFP, 500 };
+static const CANConfig *tsCanConfig = &canConfig500;
 #endif /* TS_UART_DMA_MODE */
 #endif /* EFI_PROD_CODE */
 
@@ -108,8 +111,8 @@ void startTsPort(ts_channel_s *tsChannel) {
 				efiSetPadMode("ts can rx", GPIOG_13/*CONFIG(canRxPin)*/, PAL_MODE_ALTERNATE(TS_CAN_AF)); // CAN2_RX2_0
 				efiSetPadMode("ts can tx", GPIOG_14/*CONFIG(canTxPin)*/, PAL_MODE_ALTERNATE(TS_CAN_AF)); // CAN2_TX2_0
 
-				canStart(&TS_CAN_DEVICE, &tsCanConfig);
-				canInit(&TS_CAN_DEVICE);
+				canStart(&TS_CAN_DEVICE, tsCanConfig);
+				canInit();
 				canStreamInit(&TS_CAN_DEVICE);
 
 				//tsChannel->channel = (BaseChannel *) &TS_CAN_DEVICE;
@@ -150,6 +153,7 @@ bool stopTsPort(ts_channel_s *tsChannel) {
 }
 
 void sr5WriteData(ts_channel_s *tsChannel, const uint8_t * buffer, int size) {
+	int transferred;
         efiAssertVoid(CUSTOM_ERR_6570, getCurrentRemainingStack() > 64, "tunerStudioWriteData");
 #if EFI_SIMULATOR
 			logMsg("chSequentialStreamWrite [%d]\r\n", size);
@@ -157,14 +161,13 @@ void sr5WriteData(ts_channel_s *tsChannel, const uint8_t * buffer, int size) {
 
 #if (PRIMARY_UART_DMA_MODE || TS_UART_DMA_MODE || TS_UART_MODE) && EFI_PROD_CODE
 	if (tsChannel->uartp != nullptr) {
-	    int transferred = size;
+	    transferred = size;
 	    uartSendTimeout(tsChannel->uartp, (size_t *)&transferred, buffer, BINARY_IO_TIMEOUT);
         return;
 	}
 #elif defined(TS_CAN_DEVICE)
-	UNUSED(tsChannel);
-	int transferred = size;
-	canStreamAddToTxTimeout(&TS_CAN_DEVICE, (size_t *)&transferred, buffer, BINARY_IO_TIMEOUT);
+	transferred = size;
+	canStreamAddToTxTimeout((size_t *)&transferred, buffer, BINARY_IO_TIMEOUT);
 #endif
 	if (tsChannel->channel == nullptr)
 		return;
@@ -172,7 +175,7 @@ void sr5WriteData(ts_channel_s *tsChannel, const uint8_t * buffer, int size) {
 //	int transferred = chnWriteTimeout(tsChannel->channel, buffer, size, BINARY_IO_TIMEOUT);
 	// temporary attempt to work around #553
 	// instead of one huge packet let's try sending a few smaller packets
-	int transferred = 0;
+	transferred = 0;
 	int stillToTransfer = size;
 	while (stillToTransfer > 0) {
 		int thisTransferSize = minI(stillToTransfer, 768);
@@ -210,7 +213,7 @@ int sr5ReadDataTimeout(ts_channel_s *tsChannel, uint8_t * buffer, int size, int 
 #elif defined(TS_CAN_DEVICE)
 	UNUSED(tsChannel);
 	size_t received = (size_t)size;
-	canStreamReceiveTimeout(&TS_CAN_DEVICE, &received, buffer, timeout);
+	canStreamReceiveTimeout(&received, buffer, timeout);
 	return (int)received;
 #else /* TS_UART_DMA_MODE */
 	if (tsChannel->channel == nullptr)
@@ -285,9 +288,9 @@ bool sr5IsReady(ts_channel_s *tsChannel) {
 }
 
 void sr5FlushData(ts_channel_s *tsChannel) {
-#if defined(TS_CAN_DEVICE)
 	UNUSED(tsChannel);
-	canStreamFlushTx(&TS_CAN_DEVICE);
+#if defined(TS_CAN_DEVICE)
+	canStreamFlushTx(BINARY_IO_TIMEOUT);
 #endif /* TS_CAN_DEVICE */
 }
 
