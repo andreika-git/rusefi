@@ -131,6 +131,9 @@
 #include "engine_emulator.h"
 #endif /* EFI_ENGINE_EMULATOR */
 
+//!!!!!!!!!!!!
+#include "main_test_can.cpp"
+
 LoggingWithStorage sharedLogger("main");
 
 bool main_loop_started = false;
@@ -236,6 +239,10 @@ void runRusEfi(void) {
 
 	print("Running main loop\r\n");
 	main_loop_started = true;
+
+	//!!!!!!!!!!!!!!!!!!
+	test();
+
 	/**
 	 * This loop is the closes we have to 'main loop' - but here we only publish the status. The main logic of engine
 	 * control is around main_trigger_callback
