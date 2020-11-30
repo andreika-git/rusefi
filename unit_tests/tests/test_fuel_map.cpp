@@ -22,9 +22,6 @@ TEST(misc, testFuelMap) {
 	printf("Setting up FORD_ASPIRE_1996\r\n");
 	WITH_ENGINE_TEST_HELPER(FORD_ASPIRE_1996);
 
-	printf("*** getInjectorLag\r\n");
-	assertEqualsM("lag", 1.04, getInjectorLag(12 PASS_ENGINE_PARAMETER_SUFFIX));
-
 	for (int i = 0; i < VBAT_INJECTOR_CURVE_SIZE; i++) {
 		eth.engine.engineConfigurationPtr->injector.battLagCorrBins[i] = i;
 		eth.engine.engineConfigurationPtr->injector.battLagCorr[i] = 0.5 + 2 * i;
@@ -62,8 +59,6 @@ TEST(misc, testFuelMap) {
 	ASSERT_EQ( 6,  iatCorrection) << "IAT";
 	float cltCorrection = getCltFuelCorrection(PASS_ENGINE_PARAMETER_SIGNATURE);
 	ASSERT_EQ( 7,  cltCorrection) << "CLT";
-	float injectorLag = getInjectorLag(getVBatt(PASS_ENGINE_PARAMETER_SIGNATURE) PASS_ENGINE_PARAMETER_SUFFIX);
-	ASSERT_EQ( 0,  injectorLag) << "injectorLag";
 
 
 	engineConfiguration->mafAdcChannel = EFI_ADC_10;
@@ -79,7 +74,7 @@ TEST(misc, testFuelMap) {
 
 	engine->engineState.mockAdcState.setMockVoltage(EFI_ADC_10, 0 PASS_ENGINE_PARAMETER_SUFFIX);
 
-	engineConfiguration->cranking.baseFuel = 4;
+	engineConfiguration->cranking.baseFuel = 4000;
 
 	// Should use 20 degree correction in case of failed sensor
 	Sensor::resetMockValue(SensorType::Clt);

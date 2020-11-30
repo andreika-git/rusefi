@@ -39,6 +39,7 @@
 #include "allsensors.h"
 #include "electronic_throttle.h"
 #include "map_averaging.h"
+#include "high_pressure_fuel_pump.h"
 #include "malfunction_central.h"
 #include "malfunction_indicator.h"
 #include "speed_density.h"
@@ -50,7 +51,6 @@
 #include "spark_logic.h"
 #include "aux_valves.h"
 #include "accelerometer.h"
-#include "counter64.h"
 #include "perf_trace.h"
 #include "boost_control.h"
 #include "launch_control.h"
@@ -156,7 +156,7 @@ class PeriodicSlowController : public PeriodicTimerController {
 
 	int getPeriodMs() override {
 		// no reason to have this configurable, looks like everyone is happy with 20Hz
-		return 50;
+		return SLOW_CALLBACK_PERIOD_MS;
 	}
 };
 
@@ -219,11 +219,9 @@ static void resetAccel(void) {
 static void doPeriodicSlowCallback(DECLARE_ENGINE_PARAMETER_SIGNATURE) {
 #if EFI_ENGINE_CONTROL && EFI_SHAFT_POSITION_INPUT
 	efiAssertVoid(CUSTOM_ERR_6661, getCurrentRemainingStack() > 64, "lowStckOnEv");
-#if EFI_PROD_CODE
-	touchTimeCounter();
 
 	slowStartStopButtonCallback(PASS_ENGINE_PARAMETER_SIGNATURE);
-#endif /* EFI_PROD_CODE */
+
 
 	efitick_t nowNt = getTimeNowNt();
 
@@ -328,6 +326,8 @@ static void printAnalogInfo(void) {
 	printAnalogChannelInfo("TPS1 Secondary", engineConfiguration->tps1_2AdcChannel);
 	printAnalogChannelInfo("TPS2 Primary", engineConfiguration->tps2_1AdcChannel);
 	printAnalogChannelInfo("TPS2 Secondary", engineConfiguration->tps2_2AdcChannel);
+	printAnalogChannelInfo("LPF", engineConfiguration->lowPressureFuel.hwChannel);
+	printAnalogChannelInfo("HPF", engineConfiguration->highPressureFuel.hwChannel);
 	printAnalogChannelInfo("pPS1", engineConfiguration->throttlePedalPositionAdcChannel);
 	printAnalogChannelInfo("pPS2", engineConfiguration->throttlePedalPositionSecondAdcChannel);
 	printAnalogChannelInfo("CLT", engineConfiguration->clt.adcChannel);
@@ -337,7 +337,7 @@ static void printAnalogInfo(void) {
 	printAnalogChannelInfo("MAF", engineConfiguration->mafAdcChannel);
 	for (int i = 0; i < FSIO_ANALOG_INPUT_COUNT ; i++) {
 		adc_channel_e ch = engineConfiguration->fsioAdc[i];
-		printAnalogChannelInfo("fsio", ch);
+		printAnalogChannelInfo("FSIO analog", ch);
 	}
 
 	printAnalogChannelInfo("AFR", engineConfiguration->afr.hwChannel);
@@ -351,10 +351,6 @@ static void printAnalogInfo(void) {
 	printAnalogChannelInfo("CJ UA", engineConfiguration->cj125ua);
 
 	printAnalogChannelInfo("HIP9011", engineConfiguration->hipOutputChannel);
-
-	for (int i = 0; i < FSIO_ANALOG_INPUT_COUNT ; i++) {
-		printAnalogChannelInfo("FSIO", engineConfiguration->fsioAdc[i]);
-	}
 
 	printAnalogChannelInfoExt("Vbatt", engineConfiguration->vbattAdcChannel, getVoltage("vbatt", engineConfiguration->vbattAdcChannel PASS_ENGINE_PARAMETER_SUFFIX),
 			engineConfiguration->vbattDividerCoeff);
@@ -588,6 +584,7 @@ void commonInitEngineController(Logging *sharedLogger DECLARE_ENGINE_PARAMETER_S
 
 	initButtonShift(PASS_ENGINE_PARAMETER_SIGNATURE);
 
+	initButtonDebounce(sharedLogger);
 	initStartStopButton(PASS_ENGINE_PARAMETER_SIGNATURE);
 
 #if EFI_ELECTRONIC_THROTTLE_BODY
@@ -624,6 +621,9 @@ void commonInitEngineController(Logging *sharedLogger DECLARE_ENGINE_PARAMETER_S
 		 */
 		initSparkLogic(sharedLogger);
 		initMainEventListener(sharedLogger PASS_ENGINE_PARAMETER_SUFFIX);
+#if EFI_HPFP
+		initHPFP(PASS_ENGINE_PARAMETER_SIGNATURE);
+#endif // EFI_HPFP
 	}
 #endif /* EFI_ENGINE_CONTROL */
 
@@ -636,8 +636,6 @@ void initEngineContoller(Logging *sharedLogger DECLARE_ENGINE_PARAMETER_SUFFIX) 
 	addConsoleAction("analoginfo", printAnalogInfo);
 
 #if EFI_PROD_CODE && EFI_ENGINE_CONTROL
-	enginePins.startPins();
-
 	initBenchTest(sharedLogger);
 #endif /* EFI_PROD_CODE && EFI_ENGINE_CONTROL */
 
@@ -707,7 +705,7 @@ void initEngineContoller(Logging *sharedLogger DECLARE_ENGINE_PARAMETER_SUFFIX) 
  * UNUSED_SIZE constants.
  */
 #ifndef RAM_UNUSED_SIZE
-#define RAM_UNUSED_SIZE 3000
+#define RAM_UNUSED_SIZE 3400
 #endif
 #ifndef CCM_UNUSED_SIZE
 #define CCM_UNUSED_SIZE 2900

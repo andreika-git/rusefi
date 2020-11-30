@@ -69,11 +69,9 @@
 #include "me7pnp.h"
 #include "vw_b6.h"
 #include "chevrolet_camaro_4.h"
-#include "chevrolet_c20_1973.h"
 #include "toyota_jzs147.h"
 #include "ford_festiva.h"
 #include "lada_kalina.h"
-#include "zil130.h"
 #include "honda_600.h"
 #include "boost_control.h"
 #if EFI_IDLE_CONTROL
@@ -247,10 +245,10 @@ void setConstantDwell(floatms_t dwellMs DECLARE_CONFIG_PARAMETER_SUFFIX) {
 	setLinearCurve(engineConfiguration->sparkDwellValues, dwellMs, dwellMs, 0.01);
 }
 
-void setAfrMap(afr_table_t table, float value) {
+void setLambdaMap(lambda_table_t table, float value) {
 	for (int l = 0; l < FUEL_LOAD_COUNT; l++) {
 		for (int rpmIndex = 0; rpmIndex < FUEL_RPM_COUNT; rpmIndex++) {
-			table[l][rpmIndex] = (int)(value * PACK_MULT_AFR_CFG);
+			table[l][rpmIndex] = (int)(value * PACK_MULT_LAMBDA_CFG);
 		}
 	}
 }
@@ -276,7 +274,7 @@ void setWholeIgnitionIatCorr(float value DECLARE_CONFIG_PARAMETER_SUFFIX) {
 void setFuelTablesLoadBin(float minValue, float maxValue DECLARE_CONFIG_PARAMETER_SUFFIX) {
 	setLinearCurve(config->injPhaseLoadBins, minValue, maxValue, 1);
 	setLinearCurve(config->veLoadBins, minValue, maxValue, 1);
-	setLinearCurve(config->afrLoadBins, minValue, maxValue, 1);
+	setLinearCurve(config->lambdaLoadBins, minValue, maxValue, 1);
 }
 
 void setTimingMap(ignition_table_t map, float value) {
@@ -309,43 +307,9 @@ void prepareVoidConfiguration(engine_configuration_s *engineConfiguration) {
 	efiAssertVoid(OBD_PCM_Processor_Fault, engineConfiguration != NULL, "ec NULL");
 	memset(engineConfiguration, 0, sizeof(engine_configuration_s));
 
-
-	// Now that GPIO_UNASSIGNED == 0 we do not really need explicit zero assignments since memset above does that
-	// todo: migrate 'EFI_ADC_NONE' to '0' and eliminate the need in this method altogether
-	for (int i = 0; i < FSIO_ANALOG_INPUT_COUNT ; i++) {
-		engineConfiguration->fsioAdc[i] = EFI_ADC_NONE;
-	}
-
-	engineConfiguration->clt.adcChannel = EFI_ADC_NONE;
-	engineConfiguration->iat.adcChannel = EFI_ADC_NONE;
-
-	engineConfiguration->cj125ua = EFI_ADC_NONE;
-	engineConfiguration->cj125ur = EFI_ADC_NONE;
-	engineConfiguration->auxTempSensor1.adcChannel = EFI_ADC_NONE;
-	engineConfiguration->auxTempSensor2.adcChannel = EFI_ADC_NONE;
-	engineConfiguration->baroSensor.hwChannel = EFI_ADC_NONE;
-	engineConfiguration->throttlePedalPositionAdcChannel = EFI_ADC_NONE;
-	engineConfiguration->oilPressure.hwChannel = EFI_ADC_NONE;
-	engineConfiguration->vRefAdcChannel = EFI_ADC_NONE;
-	engineConfiguration->vbattAdcChannel = EFI_ADC_NONE;
-	engineConfiguration->map.sensor.hwChannel = EFI_ADC_NONE;
-	engineConfiguration->mafAdcChannel = EFI_ADC_NONE;
-/* this breaks unit tests lovely TODO: fix this?
-	engineConfiguration->tps1_1AdcChannel = EFI_ADC_NONE;
-*/
-	engineConfiguration->tps2_1AdcChannel = EFI_ADC_NONE;
-	engineConfiguration->auxFastSensor1_adcChannel = EFI_ADC_NONE;
-	engineConfiguration->externalKnockSenseAdc = EFI_ADC_NONE;
-	engineConfiguration->fuelLevelSensor = EFI_ADC_NONE;
-	engineConfiguration->hipOutputChannel = EFI_ADC_NONE;
-	engineConfiguration->afr.hwChannel = EFI_ADC_NONE;
-	engineConfiguration->high_fuel_pressure_sensor_1 = EFI_ADC_NONE;
-	engineConfiguration->high_fuel_pressure_sensor_2 = EFI_ADC_NONE;
-
 	engineConfiguration->clutchDownPinMode = PI_PULLUP;
 	engineConfiguration->clutchUpPinMode = PI_PULLUP;
 	engineConfiguration->brakePedalPinMode = PI_PULLUP;
-
 }
 
 void setDefaultBasePins(DECLARE_CONFIG_PARAMETER_SIGNATURE) {
@@ -734,6 +698,11 @@ static void setDefaultEngineConfiguration(DECLARE_ENGINE_PARAMETER_SIGNATURE) {
 	setDefaultIdleParameters(PASS_CONFIG_PARAMETER_SIGNATURE);
 #endif /* EFI_IDLE_CONTROL */
 
+#if !EFI_UNIT_TEST
+	// todo: this is a reasonable default for what kinds of engines exactly?
+	engineConfiguration->wwaeTau = 0.3;
+	engineConfiguration->wwaeBeta = 0.3;
+#endif // EFI_UNIT_TEST
 
 #if EFI_ELECTRONIC_THROTTLE_BODY
 	setDefaultEtbParameters(PASS_CONFIG_PARAMETER_SIGNATURE);
@@ -769,7 +738,7 @@ static void setDefaultEngineConfiguration(DECLARE_ENGINE_PARAMETER_SIGNATURE) {
 
 	CONFIG(mapMinBufferLength) = 1;
 
-	CONFIG(startCrankingDuration) = 7;
+	CONFIG(startCrankingDuration) = 3;
 
 	CONFIG(compressionRatio) = 9;
 
@@ -784,7 +753,6 @@ static void setDefaultEngineConfiguration(DECLARE_ENGINE_PARAMETER_SIGNATURE) {
 	initTemperatureCurve(IAT_FUEL_CORRECTION_CURVE, 1);
 
 	engineConfiguration->tachPulseDuractionMs = 4;
-	engineConfiguration->tachPulseTriggerIndex = 4;
 
 	engineConfiguration->auxPid[0].minValue = 10;
 	engineConfiguration->auxPid[0].maxValue = 90;
@@ -833,8 +801,8 @@ static void setDefaultEngineConfiguration(DECLARE_ENGINE_PARAMETER_SIGNATURE) {
 	setLinearCurve(engineConfiguration->map.samplingWindowBins, 800, 7000, 1);
 	setLinearCurve(engineConfiguration->map.samplingWindow, 50, 50, 1);
 
-	setAfrMap(config->afrTable, 14.7);
-	engineConfiguration->stoichRatioPrimary = 14.7f / PACK_MULT_AFR_CFG;
+	setLambdaMap(config->lambdaTable, 1.0f);
+	engineConfiguration->stoichRatioPrimary = 14.7f * PACK_MULT_AFR_CFG;
 
 	setDefaultVETable(PASS_ENGINE_PARAMETER_SIGNATURE);
 
@@ -935,7 +903,7 @@ static void setDefaultEngineConfiguration(DECLARE_ENGINE_PARAMETER_SIGNATURE) {
 	 * Cranking defaults
 	 */
 	engineConfiguration->startUpFuelPumpDuration = 4;
-	engineConfiguration->cranking.baseFuel = 5;
+	engineConfiguration->cranking.baseFuel = 27;
 	engineConfiguration->crankingChargeAngle = 70;
 
 
@@ -978,6 +946,10 @@ static void setDefaultEngineConfiguration(DECLARE_ENGINE_PARAMETER_SIGNATURE) {
 	engineConfiguration->tps2Max = convertVoltageTo10bitADC(5);
 	engineConfiguration->tps2SecondaryMin = convertVoltageTo10bitADC(0);
 	engineConfiguration->tps2SecondaryMax = convertVoltageTo10bitADC(5);
+	engineConfiguration->idlePositionMin = PACK_MULT_VOLTAGE * 0;
+	engineConfiguration->idlePositionMax = PACK_MULT_VOLTAGE * 5;
+	engineConfiguration->wastegatePositionMin = PACK_MULT_VOLTAGE * 0;
+	engineConfiguration->wastegatePositionMax = PACK_MULT_VOLTAGE * 5;
 	engineConfiguration->tpsErrorDetectionTooLow = -10; // -10% open
 	engineConfiguration->tpsErrorDetectionTooHigh = 110; // 110% open
 
@@ -1194,12 +1166,14 @@ void resetConfigurationExt(Logging * logger, configuration_callback_t boardCallb
 // todo: is it time to replace MICRO_RUS_EFI, PROTEUS, PROMETHEUS_DEFAULTS with MINIMAL_PINS? maybe rename MINIMAL_PINS to DEFAULT?
 	case PROTEUS:
 	case PROMETHEUS_DEFAULTS:
-	case DAIHATSU:
-	case DODGE_STRATUS:
-	case SUZUKI_VITARA:
+	case CHEVY_C20_1973:
+	case ZIL_130:
 	case MINIMAL_PINS:
 		// all basic settings are already set in prepareVoidConfiguration(), no need to set anything here
 		// nothing to do - we do it all in setBoardConfigurationOverrides
+		break;
+	case MIATA_PROTEUS_TCU:
+		setMiataNB2_Proteus_TCU(PASS_CONFIG_PARAMETER_SIGNATURE);
 		break;
 	case MRE_BOARD_OLD_TEST:
 		mreBoardOldTest(PASS_CONFIG_PARAMETER_SIGNATURE);
@@ -1244,6 +1218,9 @@ void resetConfigurationExt(Logging * logger, configuration_callback_t boardCallb
 	case MRE_MIATA_NA6_VAF:
 		setMiataNA6_VAF_MRE(PASS_CONFIG_PARAMETER_SIGNATURE);
 		break;
+	case MRE_MIATA_94_MAP:
+		setMiata94_MAP_MRE(PASS_CONFIG_PARAMETER_SIGNATURE);
+		break;
 	case MRE_MIATA_NA6_MAP:
 		setMiataNA6_MAP_MRE(PASS_CONFIG_PARAMETER_SIGNATURE);
 		break;
@@ -1279,9 +1256,6 @@ void resetConfigurationExt(Logging * logger, configuration_callback_t boardCallb
 		break;
 	case HONDA_ACCORD_CD:
 		setHondaAccordConfigurationThreeWires(PASS_CONFIG_PARAMETER_SIGNATURE);
-		break;
-	case ZIL_130:
-		setZil130(PASS_CONFIG_PARAMETER_SIGNATURE);
 		break;
 	case MIATA_NA6_MAP:
 		setMiataNA6_MAP_Frankenso(PASS_CONFIG_PARAMETER_SIGNATURE);
@@ -1337,9 +1311,6 @@ void resetConfigurationExt(Logging * logger, configuration_callback_t boardCallb
 	case MIATA_1990:
 		setMiata1990(PASS_CONFIG_PARAMETER_SIGNATURE);
 		break;
-	case MIATA_1994_DEVIATOR:
-		setMiata1994_d(PASS_CONFIG_PARAMETER_SIGNATURE);
-		break;
 	case MIATA_1996:
 		setMiata1996(PASS_CONFIG_PARAMETER_SIGNATURE);
 		break;
@@ -1384,9 +1355,6 @@ void resetConfigurationExt(Logging * logger, configuration_callback_t boardCallb
 		break;
 	case CAMARO_4:
 		setCamaro4(PASS_CONFIG_PARAMETER_SIGNATURE);
-		break;
-	case CHEVY_C20_1973:
-		set1973c20(PASS_CONFIG_PARAMETER_SIGNATURE);
 		break;
 	case TOYOTA_2JZ_GTE_VVTi:
 		setToyota_2jz_vics(PASS_CONFIG_PARAMETER_SIGNATURE);

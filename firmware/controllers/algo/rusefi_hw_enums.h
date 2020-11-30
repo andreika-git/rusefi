@@ -211,6 +211,9 @@ typedef enum __attribute__ ((__packed__)) {
 	TLE8888_PIN_26 = 193,
 	TLE8888_PIN_27 = 194,
 	TLE8888_PIN_28 = 195,
+	TLE8888_PIN_MR = 196,
+	TLE8888_PIN_KEY = 197,
+	TLE8888_PIN_WAKE = 198,
 } brain_pin_e;
 
 /* Plase keep updating this define */
@@ -265,6 +268,10 @@ typedef enum __attribute__ ((__packed__)) {
 	EFI_ADC_14 = 15, // PC4
 	EFI_ADC_15 = 16, // PC5
 
-	// todo: bad choice of value since now we have ADC_CHANNEL_SENSOR and could end up with 17 and 18 also
-	EFI_ADC_ERROR = 17,
+	EFI_ADC_TEMP_SENSOR = 17, // Internal temp sensor
+
+	EFI_ADC_ERROR = 50,
 } adc_channel_e;
+
+/* Plase keep updating this define */
+#define EFI_ADC_LAST	EFI_ADC_TEMP_SENSOR

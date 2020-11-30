@@ -7,12 +7,13 @@
  */
 #pragma once
 
-#include "tcu.h"
+#include "gear_controller.h"
 #include "globalaccess.h"
 #include "debounce.h"
 
 class ButtonShiftController: public GearControllerBase {
 public:
+	ButtonShiftController();
     DECLARE_ENGINE_PTR;
     void update();
     void init(DECLARE_ENGINE_PARAMETER_SIGNATURE);

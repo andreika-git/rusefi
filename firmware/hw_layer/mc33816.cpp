@@ -20,14 +20,16 @@
 
 #include "mc33816.h"
 #include "mc33816_memory_map.h"
-#include "engine_configuration.h"
+#include "engine.h"
 #include "efi_gpio.h"
 #include "hardware.h"
 #include "mc33816_data.h"
 #include "mpu_util.h"
+#include "voltage.h"
 
-EXTERN_CONFIG;
+EXTERN_ENGINE;
 
+static bool isInitializaed = false;
 
 static OutputPin chipSelect;
 static OutputPin resetB;
@@ -58,6 +60,9 @@ static bool validateChipId() {
 }
 
 static void showStats() {
+	if (!isInitializaed) {
+		scheduleMsg(logger, "WAITINIG FOR VBatt...");
+	}
 	// x9D is product code or something, and 43 is the revision?
 	scheduleMsg(logger, "MC 0x%x %s", mcChipId, validateChipId() ? "hooray!" : "not hooray :(");
 
@@ -186,11 +191,11 @@ static void setTimings() {
 void setBoostVoltage(float volts)
 {
 	// Sanity checks, Datasheet says not too high, nor too low
-	if(volts > 65.0f) {
+	if (volts > 65.0f) {
 		firmwareError(OBD_PCM_Processor_Fault, "DI Boost voltage setpoint too high: %.1f", volts);
 		return;
 	}
-	if(volts < 10.0f) {
+	if (volts < 10.0f) {
 		firmwareError(OBD_PCM_Processor_Fault, "DI Boost voltage setpoint too low: %.1f", volts);
 		return;
 	}
@@ -272,14 +277,12 @@ static void enable_flash() {
 }
 
 static void download_RAM(int target) {
-   unsigned short memory_area = 0;         // memory area
-   unsigned short start_address = 0;      // start address
-   unsigned short codeWidthRegAddr = 0;   // code width register address
-   unsigned short size = 0;               // size of RAM data
-   unsigned short command = 0;            // command data
-   unsigned short data = 0;               // RAM data
-   unsigned int k = 0;                    // used in loop for writing RAM data to the chip
-   const unsigned short *RAM_ptr;               // pointer to array of data to be sent to the chip
+   uint16_t memory_area = 0;         // memory area
+   uint16_t start_address = 0;      // start address
+   uint16_t codeWidthRegAddr = 0;   // code width register address
+   uint16_t size = 0;               // size of RAM data
+   uint16_t command = 0;            // command data
+   const uint16_t *RAM_ptr;               // pointer to array of data to be sent to the chip
 
 
    //Why Again? For Every time, just in case?
@@ -336,26 +339,16 @@ static void download_RAM(int target) {
    command = start_address << 5;
    spi_writew(command);           // sends start address command
 
-   /*
-   for(k = 0; k < size; k++)          // downloads RAM
-   {
-      data = *RAM_ptr;                // retrieves data to be sent
-      spi_writew(data);           // sends data
-      RAM_ptr++;
-   }
-   */
    spiSend(driver, size, RAM_ptr);
    spiUnselect(driver);
 }
 
 static void download_register(int r_target) {
-	   unsigned short r_start_address = 0;  // start address
-	   unsigned short r_size = 0;           // size of configuration data
-	   unsigned short r_command = 0;        // command data
-	   unsigned short r_data = 0;           // configuration data
-	   int n = 0;                           // used for loop for writing data to the chip
-	   unsigned short remainder_size = 0;   // remainder size
-	   const unsigned short *reg_ptr;            // pointer to array of data to be sent to the chip
+	   uint16_t r_start_address = 0;  // start address
+	   uint16_t r_size = 0;           // size of configuration data
+	   uint16_t r_command = 0;        // command data
+	   uint16_t remainder_size = 0;   // remainder size
+	   const uint16_t *reg_ptr;            // pointer to array of data to be sent to the chip
 
 	   switch(r_target)                     // selects target
 	   {
@@ -427,18 +420,20 @@ static void download_register(int r_target) {
 	   spiUnselect(driver);
 }
 
+static bool haveMc33816 = false;
+
 void initMc33816(Logging *sharedLogger) {
 	logger = sharedLogger;
 
 	//
-	// see setTest33816EngineConfiguration  for default configuration
+	// see setTest33816EngineConfiguration for default configuration
 	// Pins
-	if (CONFIG(mc33816_cs) == GPIO_UNASSIGNED)
+	if (CONFIG(mc33816_cs) == GPIO_UNASSIGNED ||
+			CONFIG(mc33816_rstb) == GPIO_UNASSIGNED ||
+			CONFIG(mc33816_driven) == GPIO_UNASSIGNED
+			) {
 		return;
-	if (CONFIG(mc33816_rstb) == GPIO_UNASSIGNED)
-		return;
-	if (CONFIG(mc33816_driven) == GPIO_UNASSIGNED)
-		return;
+	}
 	if (CONFIG(mc33816_flag0) != GPIO_UNASSIGNED) {
 		efiSetPadMode("mc33816 flag0", CONFIG(mc33816_flag0), getInputMode(PI_DEFAULT));
 	}
@@ -469,6 +464,7 @@ void initMc33816(Logging *sharedLogger) {
 	addConsoleAction("mc33_restart", mcRestart);
 	//addConsoleActionI("mc33_send", sendWord);
 
+	haveMc33816 = true;
 	mcRestart();
 }
 
@@ -485,6 +481,11 @@ static void mcRestart() {
 	showStats();
 
 	driven.setValue(0); // ensure driven is off
+
+	if (engine->sensors.vBatt < LOW_VBATT) {
+		scheduleMsg(logger, "GDI not Restarting until we see VBatt");
+		return;
+	}
 
 	// Does starting turn this high to begin with??
 	spiUnselect(driver);
@@ -503,7 +504,7 @@ static void mcRestart() {
 
 	mcClearDriverStatus(); // Initial clear necessary
     mcDriverStatus = readDriverStatus();
-    if(checkUndervoltV5(mcDriverStatus)){
+    if (checkUndervoltV5(mcDriverStatus)) {
     	firmwareError(OBD_PCM_Processor_Fault, "MC33 5V Under-Voltage!");
     	mcShutdown();
     	return;
@@ -541,15 +542,14 @@ static void mcRestart() {
 
     // Finished downloading, let's run the code
     enable_flash();
-    if(!check_flash())
-    {
+    if (!check_flash()) {
     	firmwareError(OBD_PCM_Processor_Fault, "MC33 no flash");
     	mcShutdown();
     	return;
     }
 
     mcDriverStatus = readDriverStatus();
-    if(checkUndervoltVccP(mcDriverStatus)){
+    if (checkUndervoltVccP(mcDriverStatus)) {
     	firmwareError(OBD_PCM_Processor_Fault, "MC33 VccP (7V) Under-Voltage!");
     	mcShutdown();
     	return;
@@ -560,18 +560,32 @@ static void mcRestart() {
     driven.setValue(1); // driven = HV
     chThdSleepMilliseconds(10); // Give it a moment
     mcDriverStatus = readDriverStatus();
-    if(!checkDrivenEnabled(mcDriverStatus)){
+    if (!checkDrivenEnabled(mcDriverStatus)) {
     	firmwareError(OBD_PCM_Processor_Fault, "MC33 Driven did not stick!");
     	mcShutdown();
     	return;
     }
 
     mcDriverStatus = readDriverStatus();
-    if(checkUndervoltVccP(mcDriverStatus)){
+    if (checkUndervoltVccP(mcDriverStatus)) {
     	firmwareError(OBD_PCM_Processor_Fault, "MC33 VccP Under-Voltage After Driven"); // Likely DC-DC LS7 is dead!
     	mcShutdown();
     	return;
     }
+}
+
+void initMc33816IfNeeded() {
+	if (!haveMc33816) {
+		return;
+	}
+	if (engine->sensors.vBatt < LOW_VBATT) {
+		isInitializaed = false;
+	} else {
+		if (!isInitializaed) {
+			mcRestart();
+			isInitializaed = true;
+		}
+	}
 }
 
 #endif /* EFI_MC33816 */

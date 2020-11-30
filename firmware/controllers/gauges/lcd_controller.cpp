@@ -142,7 +142,7 @@ static void lcdPrintf(const char *fmt, ...) {
 	lcd_HD44780_print_string(lcdLineBuffer);
 }
 
-static void showLine(lcd_line_e line, int screenY) {
+static void showLine(lcd_line_e line, int /*screenY*/) {
 	static char buffer[_MAX_FILLER + 2];
 
 	switch (line) {
@@ -200,7 +200,7 @@ static void showLine(lcd_line_e line, int screenY) {
 		lcdPrintf("IAT corr %.2f", getIatFuelCorrection(PASS_ENGINE_PARAMETER_SIGNATURE));
 		return;
 	case LL_FUEL_INJECTOR_LAG:
-		lcdPrintf("ING LAG %.2f", getInjectorLag(engine->sensors.vBatt PASS_ENGINE_PARAMETER_SIGNATURE));
+		lcdPrintf("ING LAG %.2f", engine->engineState.running.injectorLag);
 		return;
 	case LL_VBATT:
 		lcdPrintf("Battery %.2fv", getVBatt(PASS_ENGINE_PARAMETER_SIGNATURE));

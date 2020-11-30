@@ -300,6 +300,10 @@ extern bool_t debugSignalExecutor;
 
 TEST(misc, testRpmCalculator) {
 	WITH_ENGINE_TEST_HELPER(FORD_INLINE_6_1995);
+
+	// These tests were written when the default target AFR was 14.0, so replicate that
+	engineConfiguration->stoichRatioPrimary = 140;
+
 	EXPECT_CALL(eth.mockAirmass, getAirmass(_))
 		.WillRepeatedly(Return(AirmassResult{0.1008f, 50.0f}));
 
@@ -515,36 +519,12 @@ TEST(misc, testTriggerDecoder) {
 		WITH_ENGINE_TEST_HELPER(MITSU_4G93);
 
 
-//		TriggerWaveform *t = &eth.engine.triggerShape;
-//		ASSERT_EQ(1, t->eventAngles[1]);
-//		ASSERT_EQ( 0,  t->triggerIndexByAngle[56]) << "index at 0";
-//		ASSERT_EQ( 1,  t->triggerIndexByAngle[57]) << "index at 1";
-//
-//		ASSERT_EQ(270, t->eventAngles[5]);
-//		ASSERT_EQ( 4,  t->triggerIndexByAngle[269]) << "index at 269";
-//		ASSERT_EQ( 5,  t->triggerIndexByAngle[270]) << "index at 270";
-//		ASSERT_EQ( 5,  t->triggerIndexByAngle[271]) << "index at 271";
-//
-//		ASSERT_EQ(306, t->eventAngles[6]);
-//		ASSERT_EQ(5, t->triggerIndexByAngle[305]);
-//		ASSERT_EQ(6, t->triggerIndexByAngle[306]);
-//		ASSERT_EQ(6, t->triggerIndexByAngle[307]);
-//
-//		ASSERT_EQ(666, t->eventAngles[11]);
-//		ASSERT_EQ( 10,  t->triggerIndexByAngle[665]) << "index for 665";
-//		ASSERT_EQ( 11,  t->triggerIndexByAngle[668]) << "index for 668";
-
-
 		eth.persistentConfig.engineConfiguration.useOnlyRisingEdgeForTrigger = false;
 		eth.persistentConfig.engineConfiguration.sensorChartMode = SC_DETAILED_RPM;
 		applyNonPersistentConfiguration(NULL PASS_ENGINE_PARAMETER_SUFFIX);
 
-//		assertEqualsM2("rpm#1", 16666.9746, eth.engine.triggerCentral.triggerState.instantRpmValue[0], 0.5);
-//		assertEqualsM2("rpm#2", 16666.3750, eth.engine.triggerCentral.triggerState.instantRpmValue[1], 0.5);
-
 	}
 	testTriggerDecoder2("miata 1990", MIATA_1990, 11, 0.2985, 0.3890);
-	testTriggerDecoder3("miata 1994", MIATA_1994_DEVIATOR, 11, 0.2985, 0.3890, MIATA_NA_GAP);
 	testTriggerDecoder3("citroen", CITROEN_TU3JP, 0, 0.4833, 0.0, 2.9994);
 
 	testTriggerDecoder2("CAMARO_4", CAMARO_4, 40, 0.5, 0);
@@ -563,7 +543,7 @@ TEST(misc, testTriggerDecoder) {
 
 	testTriggerDecoder2("sachs", SACHS, 0, 0.4800, 0.000);
 
-	testTriggerDecoder2("vw ABA", VW_ABA, 114, 0.5000, 0.0);
+	testTriggerDecoder2("vw ABA", VW_ABA, 0, 0.51666, 0.0);
 }
 
 extern fuel_Map3D_t fuelMap;
@@ -944,7 +924,7 @@ void doTestFuelSchedulerBug299smallAndMedium(int startUpDelayMs) {
 	ASSERT_EQ(CUSTOM_OBD_SKIPPED_FUEL, unitTestWarningCodeState.recentWarnings.get(0));
 }
 
-static void setInjectionMode(int value DECLARE_ENGINE_PARAMETER_SUFFIX) {
+void setInjectionMode(int value DECLARE_ENGINE_PARAMETER_SUFFIX) {
 	engineConfiguration->injectionMode = (injection_mode_e) value;
 	incrementGlobalConfigurationVersion(PASS_ENGINE_PARAMETER_SIGNATURE);
 }
@@ -1007,31 +987,6 @@ TEST(big, testSequential) {
 	assertInjectionEvent("#1_i_@", &t->elements[1],	2, 1, 126 + 180);	// Cyl 3
 	assertInjectionEvent("#2@", &t->elements[2],	3, 0, 126);	// Cyl 4
 	assertInjectionEvent("inj#3@", &t->elements[3],	1, 0, 126 + 180);	// Cyl 2
-}
-
-TEST(big, testDifferentInjectionModes) {
-	WITH_ENGINE_TEST_HELPER(TEST_ENGINE);
-	setupSimpleTestEngineWithMafAndTT_ONE_trigger(&eth);
-
-	EXPECT_CALL(eth.mockAirmass, getAirmass(_))
-		.WillRepeatedly(Return(AirmassResult{1.3440001f, 50.0f}));
-
-	setInjectionMode((int)IM_BATCH PASS_ENGINE_PARAMETER_SUFFIX);
-	engine->periodicFastCallback(PASS_ENGINE_PARAMETER_SIGNATURE);
-	EXPECT_FLOAT_EQ( 20,  engine->injectionDuration) << "injection while batch";
-
-	setInjectionMode((int)IM_SIMULTANEOUS PASS_ENGINE_PARAMETER_SUFFIX);
-	engine->periodicFastCallback(PASS_ENGINE_PARAMETER_SIGNATURE);
-	EXPECT_FLOAT_EQ( 10,  engine->injectionDuration) << "injection while simultaneous";
-
-	setInjectionMode((int)IM_SEQUENTIAL PASS_ENGINE_PARAMETER_SUFFIX);
-	engine->periodicFastCallback(PASS_ENGINE_PARAMETER_SIGNATURE);
-	EXPECT_FLOAT_EQ( 40,  engine->injectionDuration) << "injection while IM_SEQUENTIAL";
-
-	setInjectionMode((int)IM_SINGLE_POINT PASS_ENGINE_PARAMETER_SUFFIX);
-	engine->periodicFastCallback(PASS_ENGINE_PARAMETER_SIGNATURE);
-	EXPECT_FLOAT_EQ( 40,  engine->injectionDuration) << "injection while IM_SINGLE_POINT";
-	EXPECT_EQ( 0,  unitTestWarningCodeState.recentWarnings.getCount()) << "warningCounter#testDifferentInjectionModes";
 }
 
 TEST(big, testFuelSchedulerBug299smallAndLarge) {

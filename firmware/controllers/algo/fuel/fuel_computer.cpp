@@ -11,12 +11,14 @@ mass_t FuelComputerBase::getCycleFuel(mass_t airmass, int rpm, float load) const
 	float afr = stoich * lambda;
 
 	ENGINE(engineState.currentAfrLoad) = load;
+	ENGINE(engineState.targetLambda) = lambda;
 	ENGINE(engineState.targetAFR) = afr;
+	ENGINE(engineState.stoichiometricRatio) = stoich;
 
 	return airmass / afr;
 }
 
-FuelComputer::FuelComputer(const ValueProvider3D& afrTable) : m_afrTable(&afrTable) {}
+FuelComputer::FuelComputer(const ValueProvider3D& lambdaTable) : m_lambdaTable(&lambdaTable) {}
 
 float FuelComputer::getStoichiometricRatio() const {
 	// TODO: vary this with ethanol content/configured setting/whatever
@@ -31,14 +33,17 @@ float FuelComputer::getStoichiometricRatio() const {
 }
 
 float FuelComputer::getTargetLambda(int rpm, float load) const {
-	efiAssert(OBD_PCM_Processor_Fault, m_afrTable != nullptr, "AFR table null", 0);
+	efiAssert(OBD_PCM_Processor_Fault, m_lambdaTable != nullptr, "AFR table null", 0);
 
-	// TODO: set the table value in lambda instead of afr
-	return m_afrTable->getValue(rpm, load) / 14.7f;
+	return m_lambdaTable->getValue(rpm, load);
 }
 
 float FuelComputer::getTargetLambdaLoadAxis(float defaultLoad) const {
-	switch(CONFIG(afrOverrideMode)) {
+	return getLoadOverride(defaultLoad, CONFIG(afrOverrideMode) PASS_ENGINE_PARAMETER_SUFFIX);
+}
+
+float getLoadOverride(float defaultLoad, afr_override_e overrideMode DECLARE_ENGINE_PARAMETER_SUFFIX) {
+	switch(overrideMode) {
 		case AFR_None: return defaultLoad;
 		case AFR_MAP: return getMap(PASS_ENGINE_PARAMETER_SIGNATURE);
 		// TPS/pedal default to 100% - failed TPS goes rich

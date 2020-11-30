@@ -122,24 +122,34 @@ struct tle8888_config tle8888_cfg = {
 		.cr2 = SPI_CR2_16BIT_MODE
 	},
 	.reset =  {.port = NULL,	.pad = 0},
-	.direct_io = {
-		[0] = {.port = GPIOE,	.pad = 10,	.output =  5},
-		[1] = {.port = GPIOE,	.pad = 9,	.output =  6},
-		[2] = {.port = GPIOE,	.pad = 8,	.output = 21},
-		[3] = {.port = NULL,	.pad = 0,	.output = 15},
-//		[3] = {.port = GPIOE,	.pad = 7,	.output = 22},
-
-
-/*
-		[0] = {.port = NULL,	.pad = 0,	.output = 9},
-		[1] = {.port = NULL,	.pad = 0,	.output = 10},
-		[2] = {.port = NULL,	.pad = 0,	.output = 11},
-		[3] = {.port = NULL,	.pad = 0,	.output = 12},
-*/
+	.direct_gpio = {
+		/* IN1..4 -> OUT1..OUT4 (Injectors) */
+		[0] = {.port = GPIOE,	.pad = 14},
+		[1] = {.port = GPIOE,	.pad = 13},
+		[2] = {.port = GPIOE,	.pad = 12},
+		[3] = {.port = GPIOE,	.pad = 11},
+		/* IN5..8 -> IGN1..IGN4 (Ignotors) */
+		/* Not used */
+		[4] = {.port = NULL,	.pad = 0},
+		[5] = {.port = NULL,	.pad = 0},
+		[6] = {.port = NULL,	.pad = 0},
+		[7] = {.port = NULL,	.pad = 0},
+		/* Remapable IN9..12 */
+		[8] = {.port = GPIOE,	.pad = 10},
+		[9] = {.port = GPIOE,	.pad = 9},
+		[10] = {.port = GPIOE,	.pad = 8},
+		[11] = {.port = GPIOE,	.pad = 7},
+	},
+	.direct_maps = {
+		[0] = {.output =  5},
+		[1] = {.output =  6},
+		[2] = {.output = 21},
+		[3] = {.output = 22},
 	},
 	.ign_en =  {.port = GPIOD,	.pad = 10},
 	.inj_en =  {.port = GPIOD,	.pad = 11},
 	.mode = TL_AUTO,
+	.stepper = false
 };
 #endif
 
@@ -211,6 +221,7 @@ void initSmartGpio() {
 		tle8888_cfg.spi_bus = getSpiDevice(engineConfiguration->tle8888spiDevice);
 
 		tle8888_cfg.mode = engineConfiguration->tle8888mode;
+		tle8888_cfg.stepper = engineConfiguration->useTLE8888_stepper;
 
 		/* spi_bus == null checked in _add function */
 		ret = tle8888_add(0, &tle8888_cfg);
@@ -221,7 +232,7 @@ void initSmartGpio() {
 	}
 	if (ret < 0)
 		/* whenever chip is disabled or error returned - occupy its gpio range */
-		gpiochip_use_gpio_base(TLE8888_OUTPUTS);
+		gpiochip_use_gpio_base(TLE8888_SIGNALS);
 #endif /* (BOARD_TLE8888_COUNT > 0) */
 
 #if (BOARD_DRV8860_COUNT > 0)
@@ -249,16 +260,16 @@ void initSmartGpio() {
 #if (BOARD_EXT_GPIOCHIPS > 0)
 void stopSmartCsPins() {
 #if (BOARD_TLE8888_COUNT > 0)
-	brain_pin_markUnused(activeConfiguration.tle8888_cs);
+	efiSetPadUnused(activeConfiguration.tle8888_cs);
 #endif /* BOARD_TLE8888_COUNT */
 #if (BOARD_TLE6240_COUNT > 0)
-	brain_pin_markUnused(activeConfiguration.tle6240_cs);
+	efiSetPadUnused(activeConfiguration.tle6240_cs);
 #endif /* BOARD_TLE6240_COUNT */
 #if (BOARD_MC33972_COUNT > 0)
-	brain_pin_markUnused(activeConfiguration.mc33972_cs);
+	efiSetPadUnused(activeConfiguration.mc33972_cs);
 #endif /* BOARD_MC33972_COUNT */
 #if (BOARD_DRV8860_COUNT > 0)
-	brain_pin_markUnused(activeConfiguration.drv8860_cs);
+	efiSetPadUnused(activeConfiguration.drv8860_cs);
 #endif /* BOARD_DRV8860_COUNT */
 }
 

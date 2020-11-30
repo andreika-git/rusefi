@@ -112,13 +112,12 @@ static void endAveraging(void *arg);
 static void startAveraging(scheduling_s *endAveragingScheduling) {
 	efiAssertVoid(CUSTOM_ERR_6649, getCurrentRemainingStack() > 128, "lowstck#9");
 
-	bool wasLocked = lockAnyContext();
-	// with locking we would have a consistent state
-	mapAdcAccumulator = 0;
-	mapMeasurementsCounter = 0;
-	isAveraging = true;
-	if (!wasLocked) {
-		unlockAnyContext();
+	{
+		// with locking we will have a consistent state
+		chibios_rt::CriticalSectionLocker csl;
+		mapAdcAccumulator = 0;
+		mapMeasurementsCounter = 0;
+		isAveraging = true;
 	}
 
 	mapAveragingPin.setHigh();
@@ -169,22 +168,19 @@ void mapAveragingAdcCallback(adcsample_t adcValue) {
 	readIndex = writeIndex;
 
 	// todo: migrate to the lock-free implementation
-	bool alreadyLocked = lockAnyContext();
-	;
-	// with locking we would have a consistent state
-
-	mapAdcAccumulator += adcValue;
-	mapMeasurementsCounter++;
-	if (!alreadyLocked)
-		unlockAnyContext();
-	;
+	{
+		// with locking we will have a consistent state
+		chibios_rt::CriticalSectionLocker csl;
+		mapAdcAccumulator += adcValue;
+		mapMeasurementsCounter++;
+	}
 }
 #endif
 
 static void endAveraging(void *arg) {
 	(void) arg;
 #if ! EFI_UNIT_TEST
-	bool wasLocked = lockAnyContext();
+	chibios_rt::CriticalSectionLocker csl;
 #endif
 	isAveraging = false;
 	// with locking we would have a consistent state
@@ -205,11 +201,6 @@ static void endAveraging(void *arg) {
 	} else {
 		warning(CUSTOM_UNEXPECTED_MAP_VALUE, "No MAP values");
 	}
-#endif
-#if ! EFI_UNIT_TEST
-	if (!wasLocked)
-		unlockAnyContext();
-	;
 #endif
 	mapAveragingPin.setLow();
 }
@@ -269,9 +260,6 @@ void refreshMapAveragingPreCalc(DECLARE_ENGINE_PARAMETER_SIGNATURE) {
  */
 void mapAveragingTriggerCallback(
 		uint32_t index, efitick_t edgeTimestamp DECLARE_ENGINE_PARAMETER_SUFFIX) {
-
-	ScopePerf perf(PE::MapAveragingTriggerCallback);
-	
 #if EFI_ENGINE_CONTROL
 	// this callback is invoked on interrupt thread
 	if (index != (uint32_t)CONFIG(mapAveragingSchedulingAtIndex))
@@ -281,6 +269,8 @@ void mapAveragingTriggerCallback(
 	if (!isValidRpm(rpm)) {
 		return;
 	}
+
+	ScopePerf perf(PE::MapAveragingTriggerCallback);
 
 	if (CONFIG(mapMinBufferLength) != mapMinBufferLength) {
 		applyMapMinBufferLength(PASS_ENGINE_PARAMETER_SIGNATURE);

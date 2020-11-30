@@ -1,4 +1,4 @@
-// this section was generated automatically by rusEfi tool ConfigDefinition.jar based on hellen_cypress_gen_config.bat integration/rusefi_config.txt Sun Oct 04 02:01:51 UTC 2020
+// this section was generated automatically by rusEfi tool ConfigDefinition.jar based on hellen_cypress_gen_config.bat integration/rusefi_config.txt Mon Nov 30 05:13:50 UTC 2020
 // by class com.rusefi.output.CHeaderConsumer
 // begin
 #pragma once
@@ -115,7 +115,9 @@ typedef struct pid_s pid_s;
 // start of cranking_parameters_s
 struct cranking_parameters_s {
 	/**
-	 * Base duration of the fuel injection during cranking, this is modified by the multipliers for CLT, IAT, TPS ect, to give the final cranking pulse width.
+	 * Base mass of the per-cylinder fuel injected during cranking. This is then modified by the multipliers for CLT, IAT, TPS ect, to give the final cranking pulse width.
+	 * A reasonable starting point is 60mg per liter per cylinder.
+	 * ex: 2 liter 4 cyl = 500cc/cyl, so 30mg cranking fuel.
 	 * offset 0
 	 */
 	float baseFuel;
@@ -318,11 +320,11 @@ struct thermistor_conf_s {
 typedef struct thermistor_conf_s thermistor_conf_s;
 
 /**
- * @brief Oil pressure sensor interpolation
+ * @brief Linear sensor interpolation
 
 */
-// start of oil_pressure_config_s
-struct oil_pressure_config_s {
+// start of linear_sensor_s
+struct linear_sensor_s {
 	/**
 	 * offset 0
 	 */
@@ -350,7 +352,7 @@ struct oil_pressure_config_s {
 	/** total size 20*/
 };
 
-typedef struct oil_pressure_config_s oil_pressure_config_s;
+typedef struct linear_sensor_s linear_sensor_s;
 
 /**
  * @brief Thermistor curve parameters
@@ -602,8 +604,8 @@ struct idle_hardware_s {
 
 typedef struct idle_hardware_s idle_hardware_s;
 
-// start of etb_io
-struct etb_io {
+// start of dc_io
+struct dc_io {
 	/**
 	 * offset 0
 	 */
@@ -623,7 +625,7 @@ struct etb_io {
 	/** total size 4*/
 };
 
-typedef struct etb_io etb_io;
+typedef struct dc_io dc_io;
 
 // start of engine_configuration_s
 struct engine_configuration_s {
@@ -729,7 +731,7 @@ struct engine_configuration_s {
 	bool displayLogicLevelsInEngineSniffer : 1;
 	/**
 	offset 76 bit 25 */
-	bool issue_294_26 : 1;
+	bool useTLE8888_stepper : 1;
 	/**
 	offset 76 bit 26 */
 	bool issue_294_27 : 1;
@@ -749,14 +751,14 @@ struct engine_configuration_s {
 	offset 76 bit 31 */
 	bool unusedBit_34_31 : 1;
 	/**
-	 * Closed throttle. todo: extract these two fields into a structure
+	 * Closed throttle, 1 volt = 200 units.
 	 * See also tps1_1AdcChannel
 	 * set tps_min X
 	 * offset 80
 	 */
 	int16_t tpsMin;
 	/**
-	 * Full throttle. tpsMax value as 10 bit ADC value. Not Voltage!
+	 * Full throttle.
 	 * See also tps1_1AdcChannel
 	 * set tps_max X
 	 * offset 82
@@ -861,8 +863,6 @@ struct engine_configuration_s {
 	int rpmHardLimit;
 	/**
 	 * This setting controls which fuel quantity control algorithm is used.
-	 * See also useTPSAdvanceTable
-	 * set algorithm X
 	 * offset 420
 	 */
 	engine_load_mode_e fuelAlgorithm;
@@ -903,7 +903,7 @@ struct engine_configuration_s {
 	 */
 	angle_t ignitionOffset;
 	/**
-	 * Dynamic uses the timing map to decide the ignition timing, Static timing fixes the timing to the value set below (only use for checking static timing).
+	 * Dynamic uses the timing map to decide the ignition timing, Static timing fixes the timing to the value set below (only use for checking static timing with a timing light).
 	 * offset 448
 	 */
 	timing_mode_e timingMode;
@@ -915,7 +915,8 @@ struct engine_configuration_s {
 	angle_t fixedModeTiming;
 	/**
 	 * Angle between Top Dead Center (TDC) and the first trigger event.
-	 * Knowing this angle allows us to control timing and other angles in reference to TDC.
+	 * Positive value in case of synchnization point before TDC and negative in case of synchnization point after TDC
+	 * .Knowing this angle allows us to control timing and other angles in reference to TDC.
 	 * set global_trigger_offset_angle X
 	 * offset 456
 	 */
@@ -1023,11 +1024,11 @@ struct engine_configuration_s {
 	/**
 	 * offset 541
 	 */
-	adc_channel_e high_fuel_pressure_sensor_1;
+	uint8_t unused541;
 	/**
 	 * offset 542
 	 */
-	adc_channel_e high_fuel_pressure_sensor_2;
+	uint8_t unused542;
 	/**
 	 * See hasMafSensor
 	 * offset 543
@@ -1063,6 +1064,7 @@ struct engine_configuration_s {
 	 * See throttlePedalPositionSecondAdcChannel for second channel
 	 * See also tps1_1AdcChannel
 	 * set_analog_input_pin pps X
+	 * See throttlePedalUpVoltage and throttlePedalWOTVoltage
 	 * offset 580
 	 */
 	adc_channel_e throttlePedalPositionAdcChannel;
@@ -1105,6 +1107,7 @@ struct engine_configuration_s {
 	 * Same RPM is used for two ways of producing simulated RPM. See also triggerSimulatorPins (with wires)
 	 * See also directSelfStimulation (no wires, bypassing input hardware)
 	 * rpm X
+	 * TODO: rename to triggerSimulatorRpm
 	 * offset 620
 	 */
 	int triggerSimulatorFrequency;
@@ -1256,6 +1259,7 @@ struct engine_configuration_s {
 	 * Electronic throttle pedal position input
 	 * Second channel
 	 * See also tps1_1AdcChannel
+	 * See throttlePedalSecondaryUpVoltage and throttlePedalSecondaryWOTVoltage
 	 * offset 683
 	 */
 	adc_channel_e throttlePedalPositionSecondAdcChannel;
@@ -1334,6 +1338,7 @@ struct engine_configuration_s {
 	/**
 	 * Voltage when the wastegate is fully open.
 	 * You probably don't have one of these!
+	 * 1 volt = 1000 units
 	 * offset 718
 	 */
 	uint16_t wastegatePositionMax;
@@ -1346,13 +1351,18 @@ struct engine_configuration_s {
 	/**
 	 * Voltage when the idle valve is open.
 	 * You probably don't have one of these!
+	 * 1 volt = 1000 units
 	 * offset 722
 	 */
 	uint16_t idlePositionMax;
 	/**
 	 * offset 724
 	 */
-	uint8_t unusedAt724[4];
+	uint16_t tempHpfpStart;
+	/**
+	 * offset 726
+	 */
+	uint16_t tempHpfpDuration;
 	/**
 	 * Secondary TTL channel baud rate
 	 * offset 728
@@ -1575,7 +1585,7 @@ struct engine_configuration_s {
 	 * Some Subaru and some Mazda use double-solenoid idle air valve
 	 * offset 810
 	 */
-	brain_pin_e secondSolenoidPin;
+	output_pin_e secondSolenoidPin;
 	/**
 	 * See also starterControlPin
 	 * offset 811
@@ -1843,14 +1853,14 @@ struct engine_configuration_s {
 	bool unusedBit_251_29 : 1;
 	/**
 	offset 976 bit 30 */
-	bool unusedBit_287_30 : 1;
+	bool unusedBit_288_30 : 1;
 	/**
 	offset 976 bit 31 */
-	bool unusedBit_287_31 : 1;
+	bool unusedBit_288_31 : 1;
 	/**
 	 * offset 980
 	 */
-	etb_io etbIo[ETB_COUNT];
+	dc_io etbIo[ETB_COUNT];
 	/**
 	 * Wastegate control Solenoid
 	 * offset 988
@@ -1937,7 +1947,7 @@ struct engine_configuration_s {
 	/**
 	 * offset 1088
 	 */
-	etb_io etbIo2[ETB_COUNT];
+	dc_io stepperDcIo[DC_PER_STEPPER];
 	/**
 	 * For example, BMW, GM or Chevrolet
 	 * REQUIRED for rusEFI Online
@@ -1964,7 +1974,7 @@ struct engine_configuration_s {
 	/**
 	 * offset 1198
 	 */
-	uint8_t solenoidPadding[2];
+	etb_function_e etbFunctions[ETB_COUNT];
 	/**
 	 * offset 1200
 	 */
@@ -1984,7 +1994,15 @@ struct engine_configuration_s {
 	/**
 	 * offset 1204
 	 */
-	int unusedAtOldBoardConfigurationEnd[64];
+	int unusedAtOldBoardConfigurationEnd[63];
+	/**
+	 * offset 1456
+	 */
+	uint16_t vehicleWeight;
+	/**
+	 * offset 1458
+	 */
+	uint16_t unusedHereHereHere;
 	/**
 	 * offset 1460
 	 */
@@ -2002,6 +2020,7 @@ struct engine_configuration_s {
 	bool fuelClosedLoopCorrectionEnabled : 1;
 	/**
 	 * Print details into rusEfi console
+	 * enable verbose_idle
 	offset 1464 bit 2 */
 	bool isVerboseIAC : 1;
 	/**
@@ -2202,9 +2221,8 @@ struct engine_configuration_s {
 	offset 1476 bit 18 */
 	bool useAdvanceCorrectionsForCranking : 1;
 	/**
-	 * This flag allows to use TPS for ignition lookup while in Speed Density Fuel Mode
 	offset 1476 bit 19 */
-	bool useTPSAdvanceTable : 1;
+	bool unused1476b19 : 1;
 	/**
 	offset 1476 bit 20 */
 	bool unused1476b20 : 1;
@@ -2339,10 +2357,9 @@ struct engine_configuration_s {
 	 */
 	float tachPulseDuractionMs;
 	/**
-	 * Trigger cycle index at which we start tach pulse (performance consideration)
 	 * offset 1708
 	 */
-	int tachPulseTriggerIndex;
+	int unused1708;
 	/**
 	 * Length of time the deposited wall fuel takes to dissipate after the start of acceleration. 
 	 * offset 1712
@@ -2675,76 +2692,76 @@ struct engine_configuration_s {
 	bool unused1130 : 1;
 	/**
 	offset 2116 bit 8 */
-	bool unusedBit_485_8 : 1;
+	bool unusedBit_488_8 : 1;
 	/**
 	offset 2116 bit 9 */
-	bool unusedBit_485_9 : 1;
+	bool unusedBit_488_9 : 1;
 	/**
 	offset 2116 bit 10 */
-	bool unusedBit_485_10 : 1;
+	bool unusedBit_488_10 : 1;
 	/**
 	offset 2116 bit 11 */
-	bool unusedBit_485_11 : 1;
+	bool unusedBit_488_11 : 1;
 	/**
 	offset 2116 bit 12 */
-	bool unusedBit_485_12 : 1;
+	bool unusedBit_488_12 : 1;
 	/**
 	offset 2116 bit 13 */
-	bool unusedBit_485_13 : 1;
+	bool unusedBit_488_13 : 1;
 	/**
 	offset 2116 bit 14 */
-	bool unusedBit_485_14 : 1;
+	bool unusedBit_488_14 : 1;
 	/**
 	offset 2116 bit 15 */
-	bool unusedBit_485_15 : 1;
+	bool unusedBit_488_15 : 1;
 	/**
 	offset 2116 bit 16 */
-	bool unusedBit_485_16 : 1;
+	bool unusedBit_488_16 : 1;
 	/**
 	offset 2116 bit 17 */
-	bool unusedBit_485_17 : 1;
+	bool unusedBit_488_17 : 1;
 	/**
 	offset 2116 bit 18 */
-	bool unusedBit_485_18 : 1;
+	bool unusedBit_488_18 : 1;
 	/**
 	offset 2116 bit 19 */
-	bool unusedBit_485_19 : 1;
+	bool unusedBit_488_19 : 1;
 	/**
 	offset 2116 bit 20 */
-	bool unusedBit_485_20 : 1;
+	bool unusedBit_488_20 : 1;
 	/**
 	offset 2116 bit 21 */
-	bool unusedBit_485_21 : 1;
+	bool unusedBit_488_21 : 1;
 	/**
 	offset 2116 bit 22 */
-	bool unusedBit_485_22 : 1;
+	bool unusedBit_488_22 : 1;
 	/**
 	offset 2116 bit 23 */
-	bool unusedBit_485_23 : 1;
+	bool unusedBit_488_23 : 1;
 	/**
 	offset 2116 bit 24 */
-	bool unusedBit_485_24 : 1;
+	bool unusedBit_488_24 : 1;
 	/**
 	offset 2116 bit 25 */
-	bool unusedBit_485_25 : 1;
+	bool unusedBit_488_25 : 1;
 	/**
 	offset 2116 bit 26 */
-	bool unusedBit_485_26 : 1;
+	bool unusedBit_488_26 : 1;
 	/**
 	offset 2116 bit 27 */
-	bool unusedBit_485_27 : 1;
+	bool unusedBit_488_27 : 1;
 	/**
 	offset 2116 bit 28 */
-	bool unusedBit_485_28 : 1;
+	bool unusedBit_488_28 : 1;
 	/**
 	offset 2116 bit 29 */
-	bool unusedBit_485_29 : 1;
+	bool unusedBit_488_29 : 1;
 	/**
 	offset 2116 bit 30 */
-	bool unusedBit_485_30 : 1;
+	bool unusedBit_488_30 : 1;
 	/**
 	offset 2116 bit 31 */
-	bool unusedBit_485_31 : 1;
+	bool unusedBit_488_31 : 1;
 	/**
 	 * set can_mode X
 	 * offset 2120
@@ -2769,9 +2786,24 @@ struct engine_configuration_s {
 	 */
 	adc_channel_e wastegatePositionSensor;
 	/**
+	 * Override the Y axis (load) value used for the ignition table.
+	 * Advanced users only: If you aren't sure you need this, you probably don't need this.
 	 * offset 2128
 	 */
-	uint8_t unused_former_warmup_target_afr[4];
+	afr_override_e ignOverrideMode;
+	/**
+	 * Select which fuel pressure sensor measures the pressure of the fuel at your injectors.
+	 * offset 2129
+	 */
+	injector_pressure_type_e injectorPressureType;
+	/**
+	 * offset 2130
+	 */
+	output_pin_e hpfpValvePin;
+	/**
+	 * offset 2131
+	 */
+	pin_output_mode_e hpfpValvePinMode;
 	/**
 	 * MAP value above which fuel is cut in case of overboost.
 	 * 0 to disable overboost cut.
@@ -2903,11 +2935,17 @@ struct engine_configuration_s {
 	/**
 	 * offset 2418
 	 */
-	uint8_t unusedSomethingWasHere[2];
+	injector_compensation_mode_e injectorCompensationMode;
 	/**
+	 * offset 2419
+	 */
+	uint8_t unused2419;
+	/**
+	 * This is the pressure at which your injector flow is known.
+	 * For example if your injectors flow 400cc/min at 3.5 bar, enter 350kpa here.
 	 * offset 2420
 	 */
-	float unused244_1;
+	float fuelReferencePressure;
 	/**
 	 * offset 2424
 	 */
@@ -2951,7 +2989,11 @@ struct engine_configuration_s {
 	/**
 	 * offset 2516
 	 */
-	uint8_t unused2516[24];
+	pid_s etbWastegatePid;
+	/**
+	 * offset 2536
+	 */
+	uint8_t unused2536[4];
 	/**
 	 * per-cylinder timing correction
 	 * offset 2540
@@ -3045,7 +3087,7 @@ struct engine_configuration_s {
 	/**
 	 * offset 2692
 	 */
-	oil_pressure_config_s oilPressure;
+	linear_sensor_s oilPressure;
 	/**
 	 * offset 2712
 	 */
@@ -3185,7 +3227,15 @@ struct engine_configuration_s {
 	/**
 	 * offset 3288
 	 */
-	uint8_t unused3288[576];
+	linear_sensor_s highPressureFuel;
+	/**
+	 * offset 3308
+	 */
+	linear_sensor_s lowPressureFuel;
+	/**
+	 * offset 3328
+	 */
+	uint8_t unused3328[536];
 	/**
 	 * offset 3864
 	 */
@@ -3648,15 +3698,15 @@ struct persistent_config_s {
 	/**
 	 * offset 18592
 	 */
-	afr_table_t afrTable;
+	lambda_table_t lambdaTable;
 	/**
 	 * offset 18848
 	 */
-	float afrLoadBins[FUEL_LOAD_COUNT];
+	float lambdaLoadBins[FUEL_LOAD_COUNT];
 	/**
 	 * offset 18912
 	 */
-	float afrRpmBins[FUEL_RPM_COUNT];
+	float lambdaRpmBins[FUEL_RPM_COUNT];
 	/**
 	 * offset 18976
 	 */
@@ -3728,4 +3778,4 @@ struct persistent_config_s {
 typedef struct persistent_config_s persistent_config_s;
 
 // end
-// this section was generated automatically by rusEfi tool ConfigDefinition.jar based on hellen_cypress_gen_config.bat integration/rusefi_config.txt Sun Oct 04 02:01:51 UTC 2020
+// this section was generated automatically by rusEfi tool ConfigDefinition.jar based on hellen_cypress_gen_config.bat integration/rusefi_config.txt Mon Nov 30 05:13:50 UTC 2020

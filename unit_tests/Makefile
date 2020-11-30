@@ -27,12 +27,16 @@ ifeq ($(USE_OPT),)
   USE_OPT += -fprofile-arcs -ftest-coverage
   USE_OPT += -Werror=missing-field-initializers
   USE_OPT += -Wno-unused-parameter -Wno-unused-function
+  USE_OPT += -fsingle-precision-constant
 endif
 
 
 #TODO! this is a nice goal
 #USE_OPT += $(RUSEFI_OPT)
 #USE_OPT += -Wno-error=format= -Wno-error=register -Wno-error=write-strings
+
+# See explanation in main firmware Makefile for these three defines
+USE_OPT += -DEFI_UNIT_TEST=1 -DEFI_PROD_CODE=0 -DEFI_SIMULATOR=0
 
 ifeq ($(CCACHE_DIR),)
  $(info No CCACHE_DIR)
@@ -100,6 +104,7 @@ include $(PROJECT_DIR)/config/engines/engines.mk
 include $(PROJECT_DIR)/controllers/controllers.mk
 include $(PROJECT_DIR)/development/development.mk
 include $(PROJECT_DIR)/console/console.mk
+include $(PROJECT_DIR)/console/binary/tunerstudio.mk
 include $(PROJECT_DIR)/hw_layer/hw_layer.mk
 include $(PROJECT_DIR)/hw_layer/drivers/drivers.mk
 include $(PROJECT_DIR)/hw_layer/sensors/sensors.mk
@@ -139,6 +144,7 @@ CPPSRC = $(UTILSRC_CPP) \
 	$(TESTS_SRC_CPP) \
 	$(SYSTEMSRC_CPP) \
 	$(HW_LAYER_EMS_CPP) \
+	$(TUNERSTUDIO_SRC_CPP) \
 	$(HW_SENSORS_SRC) \
 	$(TRIGGER_SRC_CPP) \
 	$(INIT_SRC_CPP) \

@@ -13,13 +13,15 @@ import com.rusefi.binaryprotocol.IncomingDataBuffer;
 import com.rusefi.binaryprotocol.MsqFactory;
 import com.rusefi.config.generated.Fields;
 import com.rusefi.core.EngineState;
+import com.rusefi.core.Pair;
 import com.rusefi.core.ResponseBuffer;
 import com.rusefi.io.ConnectionStateListener;
 import com.rusefi.io.ConnectionStatusLogic;
 import com.rusefi.io.IoStream;
 import com.rusefi.io.LinkManager;
-import com.rusefi.io.serial.SerialIoStreamJSerialComm;
+import com.rusefi.io.tcp.BinaryProtocolProxy;
 import com.rusefi.io.tcp.BinaryProtocolServer;
+import com.rusefi.io.tcp.ServerSocketReference;
 import com.rusefi.maintenance.ExecHelper;
 import com.rusefi.proxy.client.LocalApplicationProxy;
 import com.rusefi.tools.online.Online;
@@ -79,10 +81,28 @@ public class ConsoleTools {
         registerTool("lightui", strings -> lightUI(), "Start lightweight GUI for tiny screens");
         registerTool("dfu", DfuTool::run, "Program specified file into ECU via DFU");
 
+        registerTool("local_proxy", ConsoleTools::localProxy, "Detect rusEFI ECU and proxy serial <> TCP");
 
         registerTool("detect", ConsoleTools::detect, "Find attached rusEFI");
         registerTool("reboot_ecu", args -> sendCommand(Fields.CMD_REBOOT), "Sends a command to reboot rusEFI controller.");
         registerTool(Fields.CMD_REBOOT_DFU, args -> sendCommand(Fields.CMD_REBOOT_DFU), "Sends a command to switch rusEFI controller into DFU mode.");
+    }
+
+    private static void localProxy(String[] strings) throws IOException {
+        String autoDetectedPort = autoDetectPort();
+        if (autoDetectedPort == null) {
+            System.out.println(RUS_EFI_NOT_DETECTED);
+            return;
+        }
+        IoStream ecuStream = LinkManager.open(autoDetectedPort);
+
+        ServerSocketReference serverHolder = BinaryProtocolProxy.createProxy(ecuStream, 29001, new BinaryProtocolProxy.ClientApplicationActivityListener() {
+            @Override
+            public void onActivity() {
+
+            }
+        });
+
     }
 
     private static void version(String[] strings) {
@@ -151,7 +171,7 @@ public class ConsoleTools {
         String autoDetectedPort = autoDetectPort();
         if (autoDetectedPort == null)
             return;
-        IoStream stream = SerialIoStreamJSerialComm.openPort(autoDetectedPort);
+        IoStream stream = LinkManager.open(autoDetectedPort);
         byte[] commandBytes = BinaryProtocol.getTextCommandBytes(command);
         stream.sendPacket(commandBytes);
     }
@@ -336,14 +356,13 @@ public class ConsoleTools {
         Online.upload(new File(Online.outputXmlFileName), authToken);
     }
 
-    static void detect(String[] strings) throws IOException, InterruptedException {
+    static void detect(String[] strings) throws IOException {
         String autoDetectedPort = autoDetectPort();
         if (autoDetectedPort == null) {
             System.out.println(RUS_EFI_NOT_DETECTED);
             return;
         }
-        IoStream stream = SerialIoStreamJSerialComm.openPort(autoDetectedPort);
-        Logger logger = FileLog.LOGGER;
+        IoStream stream = LinkManager.open(autoDetectedPort);
         IncomingDataBuffer incomingData = stream.getDataBuffer();
         byte[] commandBytes = BinaryProtocol.getTextCommandBytes("hello");
         stream.sendPacket(commandBytes);
@@ -386,11 +405,13 @@ public class ConsoleTools {
 
         System.out.println("Signature: " + SerialAutoChecker.SIGNATURE);
         System.out.println("It says " + messages);
-        System.out.println("Ini file: " + SignatureHelper.getUrl(SerialAutoChecker.SIGNATURE).first);
+        Pair<String, String> stringPair = SignatureHelper.getUrl(SerialAutoChecker.SIGNATURE);
+        if (stringPair != null)
+            System.out.println("Ini file: " + stringPair.first);
         System.exit(0);
     }
 
     interface ConsoleTool {
-        void runTool(String args[]) throws Exception;
+        void runTool(String[] args) throws Exception;
     }
 }

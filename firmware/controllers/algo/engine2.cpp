@@ -27,9 +27,6 @@
 #include "status_loop.h"
 #endif
 
-extern fuel_Map3D_t veMap;
-extern afr_Map3D_t afrMap;
-
 EXTERN_ENGINE;
 
 // this does not look exactly right
@@ -129,7 +126,7 @@ void EngineState::periodicFastCallback(DECLARE_ENGINE_PARAMETER_SIGNATURE) {
 	} else {
 		timeSinceCranking = nowNt - crankingTime;
 	}
-	updateAuxValves(PASS_ENGINE_PARAMETER_SIGNATURE);
+	recalculateAuxValveTiming(PASS_ENGINE_PARAMETER_SIGNATURE);
 
 	int rpm = ENGINE(rpmCalculator).getRpm();
 	sparkDwell = getSparkDwell(rpm PASS_ENGINE_PARAMETER_SUFFIX);

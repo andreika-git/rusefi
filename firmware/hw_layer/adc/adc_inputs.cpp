@@ -248,13 +248,18 @@ static void fast_adc_callback(GPTDriver*) {
 }
 #endif /* HAL_USE_GPT */
 
-float getMCUInternalTemperature(void) {
+float getMCUInternalTemperature() {
 #if defined(ADC_CHANNEL_SENSOR)
-	float TemperatureValue = adcToVolts(slowAdc.getAdcValueByHwChannel(ADC_CHANNEL_SENSOR));
-	TemperatureValue -= 0.760; // Subtract the reference voltage at 25 deg C
-	TemperatureValue /= .0025; // Divide by slope 2.5mV
+	float TemperatureValue = adcToVolts(slowAdc.getAdcValueByHwChannel(EFI_ADC_TEMP_SENSOR));
+	TemperatureValue -= 0.760f; // Subtract the reference voltage at 25 deg C
+	TemperatureValue /= 0.0025f; // Divide by slope 2.5mV
 
 	TemperatureValue += 25.0; // Add the 25 deg C
+
+	if (TemperatureValue > 150.0f || TemperatureValue < -50.0f) {
+		firmwareError(OBD_PCM_Processor_Fault, "Invalid CPU temperature measured!");
+	}
+
 	return TemperatureValue;
 #else
 	return 0;
@@ -310,7 +315,7 @@ int AdcDevice::size() const {
 	return channelCount;
 }
 
-int AdcDevice::getAdcValueByHwChannel(int hwChannel) const {
+int AdcDevice::getAdcValueByHwChannel(adc_channel_e hwChannel) const {
 	int internalIndex = internalAdcIndexByHardwareIndex[hwChannel];
 	return values.adc_data[internalIndex];
 }
@@ -358,18 +363,18 @@ void AdcDevice::enableChannel(adc_channel_e hwChannel) {
 	internalAdcIndexByHardwareIndex[hwChannel] = logicChannel;
 	hardwareIndexByIndernalAdcIndex[logicChannel] = hwChannel;
 	if (logicChannel < 6) {
-		hwConfig->sqr3 += (channelAdcIndex) << (5 * logicChannel);
+		hwConfig->sqr3 |= channelAdcIndex << (5 * logicChannel);
 	} else if (logicChannel < 12) {
-		hwConfig->sqr2 += (channelAdcIndex) << (5 * (logicChannel - 6));
+		hwConfig->sqr2 |= channelAdcIndex << (5 * (logicChannel - 6));
 	} else if (logicChannel < 18) {
-		hwConfig->sqr1 += (channelAdcIndex) << (5 * (logicChannel - 12));
+		hwConfig->sqr1 |= channelAdcIndex << (5 * (logicChannel - 12));
 	}
 #if ADC_MAX_CHANNELS_COUNT > 16
 	else if (logicChannel < 24) {
-		hwConfig->sqr4 += (channelAdcIndex) << (5 * (logicChannel - 18));
+		hwConfig->sqr4 |= channelAdcIndex << (5 * (logicChannel - 18));
 	}
 	else if (logicChannel < 30) {
-		hwConfig->sqr5 += (channelAdcIndex) << (5 * (logicChannel - 24));
+		hwConfig->sqr5 |= channelAdcIndex << (5 * (logicChannel - 24));
 	}
 #endif /* ADC_MAX_CHANNELS_COUNT */
 }
@@ -565,10 +570,9 @@ static void configureInputs(void) {
 
 	addChannel("AFR", engineConfiguration->afr.hwChannel, ADC_SLOW);
 	addChannel("Oil Pressure", engineConfiguration->oilPressure.hwChannel, ADC_SLOW);
-	addChannel("HFP1", engineConfiguration->high_fuel_pressure_sensor_1, ADC_SLOW);
 
-
-	addChannel("HFP2", engineConfiguration->high_fuel_pressure_sensor_2, ADC_SLOW);
+	addChannel("LFP", engineConfiguration->lowPressureFuel.hwChannel, ADC_SLOW);
+	addChannel("HFP", engineConfiguration->highPressureFuel.hwChannel, ADC_SLOW);
 
 
 	if (CONFIG(isCJ125Enabled)) {
@@ -620,7 +624,7 @@ void initAdcInputs() {
 
 #if defined(ADC_CHANNEL_SENSOR)
 	// Internal temperature sensor, Available on ADC1 only
-	slowAdc.enableChannel((adc_channel_e)ADC_CHANNEL_SENSOR);
+	slowAdc.enableChannel(EFI_ADC_TEMP_SENSOR);
 #endif /* ADC_CHANNEL_SENSOR */
 
 	slowAdc.init();

@@ -19,6 +19,7 @@
 #include "speed_density.h"
 #include "advance_map.h"
 #include "os_util.h"
+#include "os_access.h"
 #include "settings.h"
 #include "aux_valves.h"
 #include "map_averaging.h"
@@ -26,15 +27,20 @@
 #include "perf_trace.h"
 #include "backup_ram.h"
 #include "idle_thread.h"
+#include "idle_hardware.h"
 #include "sensor.h"
 #include "gppwm.h"
 #include "tachometer.h"
+#if EFI_MC33816
+ #include "mc33816.h"
+#endif // EFI_MC33816
 
 #if EFI_TUNER_STUDIO
 #include "tunerstudio_outputs.h"
 #endif /* EFI_TUNER_STUDIO */
 
 #if EFI_PROD_CODE
+#include "trigger_emulator_algo.h"
 #include "bench_test.h"
 #else
 #define isRunningBenchTest() true
@@ -102,7 +108,7 @@ void Engine::initializeTriggerWaveform(Logging *logger DECLARE_ENGINE_PARAMETER_
 
 #if EFI_ENGINE_CONTROL && EFI_SHAFT_POSITION_INPUT
 	// we have a confusing threading model so some synchronization would not hurt
-	bool alreadyLocked = lockAnyContext();
+	chibios_rt::CriticalSectionLocker csl;
 
 	TRIGGER_WAVEFORM(initializeTriggerWaveform(logger,
 			engineConfiguration->ambiguousOperationMode,
@@ -131,10 +137,6 @@ void Engine::initializeTriggerWaveform(Logging *logger DECLARE_ENGINE_PARAMETER_
 		ENGINE(triggerCentral).vvtShape.initializeSyncPoint(initState,
 				engine->vvtTriggerConfiguration,
 				config);
-	}
-
-	if (!alreadyLocked) {
-		unlockAnyContext();
 	}
 
 	if (!TRIGGER_WAVEFORM(shapeDefinitionError)) {
@@ -185,6 +187,8 @@ void Engine::periodicSlowCallback(DECLARE_ENGINE_PARAMETER_SIGNATURE) {
 
 	updateGppwm();
 
+	updateIdleControl();
+
 	cylinderCleanupControl(PASS_ENGINE_PARAMETER_SIGNATURE);
 
 	standardAirCharge = getStandardAirCharge(PASS_ENGINE_PARAMETER_SIGNATURE);
@@ -195,7 +199,7 @@ void Engine::periodicSlowCallback(DECLARE_ENGINE_PARAMETER_SIGNATURE) {
 	if (CONFIG(useTLE8888_cranking_hack) && ENGINE(rpmCalculator).isCranking()) {
 		efitick_t nowNt = getTimeNowNt();
 		if (nowNt - tle8888CrankingResetTime > MS2NT(300)) {
-			requestTLE8888initialization();
+			tle8888_req_init();
 			// let's reset TLE8888 every 300ms while cranking since that's the best we can do to deal with undervoltage reset
 			// PS: oh yes, it's a horrible design! Please suggest something better!
 			tle8888CrankingResetTime = nowNt;
@@ -207,6 +211,17 @@ void Engine::periodicSlowCallback(DECLARE_ENGINE_PARAMETER_SIGNATURE) {
 
 #if HW_CHECK_MODE
 	efiAssertVoid(OBD_PCM_Processor_Fault, CONFIG(clt).adcChannel != EFI_ADC_NONE, "No CLT setting");
+	efitimesec_t secondsNow = getTimeNowSeconds();
+	if (secondsNow > 2 && secondsNow < 180) {
+		assertCloseTo("RPM", Sensor::get(SensorType::Rpm).Value, HW_CHECK_RPM);
+	} else if (!hasFirmwareError() && secondsNow > 180) {
+		static bool isHappyTest = false;
+		if (!isHappyTest) {
+			setTriggerEmulatorRPM(5 * HW_CHECK_RPM);
+			scheduleMsg(&engineLogger, "TEST PASSED");
+			isHappyTest = true;
+		}
+	}
 	assertCloseTo("clt", Sensor::get(SensorType::Clt).Value, 49.3);
 	assertCloseTo("iat", Sensor::get(SensorType::Iat).Value, 73.2);
 	assertCloseTo("aut1", Sensor::get(SensorType::AuxTemp1).Value, 13.8);
@@ -245,7 +260,9 @@ void Engine::updateSlowSensors(DECLARE_ENGINE_PARAMETER_SIGNATURE) {
 	vBattForTle8888 = sensors.vBatt;
 #endif /* BOARD_TLE8888_COUNT */
 
-	engineState.running.injectorLag = getInjectorLag(sensors.vBatt PASS_ENGINE_PARAMETER_SUFFIX);
+#if EFI_MC33816
+	initMc33816IfNeeded();
+#endif // EFI_MC33816
 #endif
 }
 

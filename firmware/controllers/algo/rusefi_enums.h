@@ -30,7 +30,6 @@
  */
 typedef enum {
 	DEFAULT_FRANKENSO = ET_DEFAULT_FRANKENSO,
-	AUDI_AAN = 1,
 	/**
 	 * 1995 Dodge Neon
 	 * http://rusefi.com/forum/viewtopic.php?t=360
@@ -56,19 +55,26 @@ typedef enum {
 	 */
 	GY6_139QMB = 8,
 
-	MAZDA_MIATA_NB1 = 9,
 
 	ROVER_V8 = ET_ROVER_V8,
 
-	MRE_MIATA_NB2_MAP = 11,
-
+	MIATA_PROTEUS_TCU = ET_MIATA_TCU_PROTEUS,
+	MAZDA_MIATA_NB1 = 9,
+	MRE_MIATA_NB2_MAP = ET_MRE_MIATA_NB2_MAP,
 	MRE_MIATA_NA6_VAF = ET_MRE_MIATA_NA6_VAF,
-
 	MRE_MIATA_NB2_ETB = 13,
+	MRE_MIATA_NA6_MAP = ET_MRE_MIATA_NA6_MAP,
+	MRE_MIATA_NB2_MAF = ET_MRE_MIATA_NB2_MAF,
+
+	// Frankenstein board
+	MIATA_1990 = 19,
+	// Frankenso board
+	MIATA_NA6_MAP = ET_FRANKENSO_MIATA_NA6,
+	MRE_MIATA_94_MAP = ET_MRE_MIATA_94_MAP,
+	MIATA_1996 = 21,
 
 	FORD_ESCORT_GT = ET_FORD_ESCORT_GT,
 
-	MRE_MIATA_NB2_MAF = ET_MRE_MIATA_NB2_MAF,
 
 	MITSU_4G93 = 16,
 
@@ -79,10 +85,6 @@ typedef enum {
 
 	HONDA_ACCORD_CD_DIP = 18,
 
-	// Frankenstein board
-	MIATA_1990 = 19,
-	MIATA_1994_DEVIATOR = 20,
-	MIATA_1996 = 21,
 
 	SUBARU_2003_WRX = 22,
 
@@ -112,13 +114,13 @@ typedef enum {
 
 	VW_ABA = ET_VW_ABA,
 
-	DODGE_STRATUS = 33,
+	UNUSED_33 = 33,
 
-	DAIHATSU = 34,
+	UNUSED_34 = 34,
 
 	CAMARO_4 = ET_CAMARO,
 
-	SUZUKI_VITARA = 36,
+	UNUSED_36 = 36,
 
 	CHEVY_C20_1973 = 37,
 
@@ -128,8 +130,6 @@ typedef enum {
 
 	BMW_M73_F = ET_BMW_M73_F,
 
-	// Frankenso board
-	MIATA_NA6_MAP = ET_FRANKENSO_MIATA_NA6,
 
 	ZIL_130 = 42,
 
@@ -191,8 +191,6 @@ typedef enum {
 
 	DODGE_RAM = 64,
 	CITROEN_TU3JP = ET_CITROEN_TU3JP,
-
-	MRE_MIATA_NA6_MAP = ET_MRE_MIATA_NA6_MAP,
 
 
 	/**
@@ -456,8 +454,7 @@ typedef enum {
 	 */
 	LM_REAL_MAF = 4,
 
-	// todo: rename after LM_ALPHA_N is removed
-	LM_ALPHA_N_2 = 5,
+	LM_ALPHA_N = 5,
 
 	// This mode is for unit testing only, so that tests don't have to rely on a particular real airmass mode
 	LM_MOCK = 100,
@@ -697,7 +694,7 @@ typedef brain_pin_e output_pin_e;
 typedef enum {
 	DBG_ALTERNATOR_PID = 0,
 	DBG_TPS_ACCEL = 1,
-	DBG_2 = 2,
+	DBG_GPPWM = 2,
 	DBG_IDLE_CONTROL = 3,
 	DBG_EL_ACCEL = 4,
 	DBG_TRIGGER_COUNTERS = 5,
@@ -758,7 +755,7 @@ typedef enum {
 	DBG_COMPOSITE_LOG = 40,
 	DBG_FSIO_EXPRESSION_8_14 = 41,
 	DBG_FSIO_SPECIAL = 42,
-	DBG_43 = 43,
+	DBG_INJECTOR_COMPENSATION = 43,
 	DBG_44 = 44,
 
 	Force_4_bytes_size_debug_mode_e = ENUM_32_BITS,
@@ -805,6 +802,12 @@ typedef enum {
 	/**
 	 * Bosch 2.5 Bar TMap Map Sensor with IAT
 	 * 20 kPa at 0.40V, 250 kPa at 4.65V
+	 * 4 pin:
+	 *    Pin 1 : Sensor Ground
+	 *    Pin 2 : Temp Signal
+	 *    Pin 3 : 5v
+	 *    Pin 4 : Map Signal
+	 * Volkswagen Passat B6
 	 */
 
 	MT_BOSCH_2_5 = 10,
@@ -1005,3 +1008,14 @@ typedef enum __attribute__ ((__packed__)) {
 	ETB_IdleValve = 3,
 	ETB_Wastegate = 4,
 } etb_function_e;
+
+typedef enum __attribute__ ((__packed__)) {
+	IPT_Low = 0,
+	IPT_High = 1,
+} injector_pressure_type_e;
+
+typedef enum __attribute__ ((__packed__)) {
+	ICM_None = 0,
+	ICM_FixedRailPressure = 1,
+	ICM_SensedRailPressure = 2,
+} injector_compensation_mode_e;

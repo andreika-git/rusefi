@@ -16,6 +16,7 @@
 EXTERN_CONFIG;
 
 // VW_ABA
+// set engine_type 32
 void setVwAba(DECLARE_CONFIG_PARAMETER_SIGNATURE) {
 	setFrankensoConfiguration(PASS_CONFIG_PARAMETER_SIGNATURE);
 
@@ -30,8 +31,8 @@ void setVwAba(DECLARE_CONFIG_PARAMETER_SIGNATURE) {
 
 
 	setOperationMode(engineConfiguration, FOUR_STROKE_CRANK_SENSOR);
-//	engineConfiguration->trigger.type = TT_TOOTHED_WHEEL_60_2;
-	engineConfiguration->trigger.type = TT_60_2_VW;
+	engineConfiguration->trigger.type = TT_TOOTHED_WHEEL_60_2;
+	engineConfiguration->useOnlyRisingEdgeForTrigger = true;
 
 	engineConfiguration->mafAdcChannel = EFI_ADC_1;
 
@@ -51,6 +52,9 @@ void setVwAba(DECLARE_CONFIG_PARAMETER_SIGNATURE) {
 	engineConfiguration->ignitionPins[2] = GPIO_UNASSIGNED;
 	engineConfiguration->ignitionPins[3] = GPIO_UNASSIGNED;
 	engineConfiguration->ignitionPinMode = OM_DEFAULT;
+
+	engineConfiguration->idlePositionSensor = EFI_ADC_3; // PA3
+	engineConfiguration->wastegatePositionSensor = EFI_ADC_4; // PA4
 
 	float mapRange = 110;
 

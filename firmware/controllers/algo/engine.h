@@ -17,7 +17,7 @@
 #include "trigger_central.h"
 #include "local_version_holder.h"
 #include "buttonshift.h"
-#include "tcu.h"
+#include "gear_controller.h"
 
 #if EFI_SIGNAL_EXECUTOR_ONE_TIMER
 // PROD real firmware uses this implementation
@@ -31,6 +31,7 @@
 #endif /* EFI_UNIT_TEST */
 
 #define FAST_CALLBACK_PERIOD_MS 5
+#define SLOW_CALLBACK_PERIOD_MS 50
 
 class RpmCalculator;
 class AirmassModelBase;
@@ -78,6 +79,7 @@ class Engine final : public TriggerStateListener {
 public:
 	explicit Engine(persistent_config_s *config);
 	Engine();
+	bool isPwmEnabled = true;
 
 	IEtbController *etbControllers[ETB_COUNT] = {nullptr};
 	IFuelComputer *fuelComputer = nullptr;
@@ -89,6 +91,7 @@ public:
 
 	PrimaryTriggerConfiguration primaryTriggerConfiguration;
 	VvtTriggerConfiguration vvtTriggerConfiguration;
+	efitick_t startStopStateLastPushTime = 0;
 
 #if EFI_SHAFT_POSITION_INPUT
 	void OnTriggerStateDecodingError();
@@ -119,11 +122,6 @@ public:
 	bool setLaunchBoostDuty = false;
 	bool applyLaunchControlRetard = false;
 #endif /* EFI_LAUNCH_CONTROL */
-
-	/**
-	 * if 2nd TPS is not configured we do not run 2nd ETB
-	 */
-	int etbActualCount = 0;
 
 	/**
 	 * By the way 32-bit value should hold at least 400 hours of events at 6K RPM x 12 events per revolution
@@ -402,3 +400,7 @@ void prepareOutputSignals(DECLARE_ENGINE_PARAMETER_SIGNATURE);
 
 void validateConfiguration(DECLARE_ENGINE_PARAMETER_SIGNATURE);
 void doScheduleStopEngine(DECLARE_ENGINE_PARAMETER_SIGNATURE);
+
+#define HW_CHECK_RPM 200
+
+

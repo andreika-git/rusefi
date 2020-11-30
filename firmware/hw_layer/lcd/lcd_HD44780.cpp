@@ -47,7 +47,7 @@ enum {
 //	LCD_2X16_BUSY_FLAG = 0x80,
 //	LCD_2X16_COMMAND = 0x01,
 //	LCD_2X16_DATA = 0x00,
-} lcd_HD44780_command;
+} /*lcd_HD44780_command*/;
 
 // http://web.alfredstate.edu/weimandn/lcd/lcd_addressing/lcd_addressing_index.html
 static const int lineStart[] = { 0, 0x40, 0x14, 0x54 };
@@ -106,19 +106,7 @@ static void lcd_HD44780_write(uint8_t data) {
 		//	LCD Pin RW -> P1
 		//	LCD Pin E  -> P2
 
-#if HAL_USE_I2C
 		// todo: finish all this stuff
-				i2cAcquireBus(&I2CD1);
-//
-//				txbuf[0] = 4;
-//				i2cMasterTransmit(&I2CD1, LCD_PORT_EXP_ADDR, txbuf, 1, NULL, 0);
-//				lcdSleep(10); // enable pulse must be >450ns
-//
-//				txbuf[0] = 0;
-//				i2cMasterTransmit(&I2CD1, LCD_PORT_EXP_ADDR, txbuf, 1, NULL, 0);
-//
-				i2cReleaseBus(&I2CD1);
-#endif /* HAL_USE_I2C */
 	}
 }
 
@@ -181,12 +169,12 @@ static void lcdInfo(DECLARE_ENGINE_PARAMETER_SIGNATURE) {
 }
 
 void stopHD44780_pins() {
-	brain_pin_markUnused(activeConfiguration.HD44780_rs);
-	brain_pin_markUnused(activeConfiguration.HD44780_e);
-	brain_pin_markUnused(activeConfiguration.HD44780_db4);
-	brain_pin_markUnused(activeConfiguration.HD44780_db5);
-	brain_pin_markUnused(activeConfiguration.HD44780_db6);
-	brain_pin_markUnused(activeConfiguration.HD44780_db7);
+	efiSetPadUnused(activeConfiguration.HD44780_rs);
+	efiSetPadUnused(activeConfiguration.HD44780_e);
+	efiSetPadUnused(activeConfiguration.HD44780_db4);
+	efiSetPadUnused(activeConfiguration.HD44780_db5);
+	efiSetPadUnused(activeConfiguration.HD44780_db6);
+	efiSetPadUnused(activeConfiguration.HD44780_db7);
 }
 
 void startHD44780_pins() {

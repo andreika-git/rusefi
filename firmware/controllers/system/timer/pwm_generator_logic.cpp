@@ -13,15 +13,12 @@
 #include "pwm_generator_logic.h"
 #include "perf_trace.h"
 
+EXTERN_ENGINE;
+
 #if EFI_PROD_CODE
 #include "mpu_util.h"
-#endif
-
-/**
- * We need to limit the number of iterations in order to avoid precision loss while calculating
- * next toggle time
- */
-#define ITERATION_LIMIT 100
+#include "engine.h"
+#endif // EFI_PROD_CODE
 
 // 1% duty cycle
 #define ZERO_PWM_THRESHOLD 0.01
@@ -121,7 +118,7 @@ static efitick_t getNextSwitchTimeNt(PwmConfig *state) {
 
 	/**
 	 * Once 'iteration' gets relatively high, we might lose calculation precision here.
-	 * This is addressed by ITERATION_LIMIT
+	 * This is addressed by iterationLimit below, using any many cycles as possible without overflowing timeToSwitchNt
 	 */
 	uint32_t timeToSwitchNt = (uint32_t)((iteration + switchTime) * periodNt);
 
@@ -157,8 +154,12 @@ void PwmConfig::handleCycleStart() {
 	if (pwmCycleCallback != NULL) {
 		pwmCycleCallback(this);
 	}
+		// Compute the maximum number of iterations without overflowing a uint32_t worth of timestamp
+		uint32_t iterationLimit = (0xFFFFFFFF / periodNt) - 2;
+
 		efiAssertVoid(CUSTOM_ERR_6580, periodNt != 0, "period not initialized");
-		if (safe.periodNt != periodNt || safe.iteration == ITERATION_LIMIT) {
+		efiAssertVoid(CUSTOM_ERR_6580, iterationLimit > 0, "iterationLimit invalid");
+		if (safe.periodNt != periodNt || safe.iteration == iterationLimit) {
 			/**
 			 * period length has changed - we need to reset internal state
 			 */
@@ -377,6 +378,16 @@ void startSimplePwmHard(SimplePwm *state, const char *msg,
  * This method takes ~350 ticks.
  */
 void applyPinState(int stateIndex, PwmConfig *state) /* pwm_gen_callback */ {
+#if EFI_PROD_CODE
+	if (!engine->isPwmEnabled) {
+		for (int channelIndex = 0; channelIndex < state->multiChannelStateSequence.waveCount; channelIndex++) {
+			OutputPin *output = state->outputPins[channelIndex];
+			output->setValue(0);
+		}
+		return;
+	}
+#endif // EFI_PROD_CODE
+
 	efiAssertVoid(CUSTOM_ERR_6663, stateIndex < PWM_PHASE_MAX_COUNT, "invalid stateIndex");
 	efiAssertVoid(CUSTOM_ERR_6664, state->multiChannelStateSequence.waveCount <= PWM_PHASE_MAX_WAVE_PER_PWM, "invalid waveCount");
 	for (int channelIndex = 0; channelIndex < state->multiChannelStateSequence.waveCount; channelIndex++) {

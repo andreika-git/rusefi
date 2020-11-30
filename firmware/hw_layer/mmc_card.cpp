@@ -25,6 +25,7 @@
 #include "engine_configuration.h"
 #include "status_loop.h"
 #include "usb_msd_cfg.h"
+#include "buffered_writer.h"
 
 #include "rtc_helper.h"
 
@@ -49,6 +50,13 @@ static int fileCreatedCounter = 0;
 static int writeCounter = 0;
 static int totalWritesCounter = 0;
 static int totalSyncCounter = 0;
+
+/**
+ * on't re-read SD card spi device after boot - it could change mid transaction (TS thread could preempt),
+ * which will cause disaster (usually multiple-unlock of the same mutex in UNLOCK_SD_SPI)
+ */
+
+spi_device_e mmcSpiDevice = SPI_NONE;
 
 #define LOG_INDEX_FILENAME "index.txt"
 
@@ -92,7 +100,6 @@ static SPIConfig ls_spicfg = {
 		.cr2 = 0};
 
 /* MMC/SD over SPI driver configuration.*/
-// don't forget check if STM32_SPI_USE_SPI2 defined and spi has init with correct GPIO in hardware.cpp
 static MMCConfig mmccfg = { NULL, &ls_spicfg, &hs_spicfg };
 
 /**
@@ -140,7 +147,7 @@ static void sdStatistics(void) {
 	printMmcPinout();
 	scheduleMsg(&logger, "SD enabled=%s status=%s", boolToString(CONFIG(isSdCardEnabled)),
 			sdStatus);
-	printSpiConfig(&logger, "SD", CONFIG(sdCardSpiDevice));
+	printSpiConfig(&logger, "SD", mmcSpiDevice);
 	if (isSdCardAlive()) {
 		scheduleMsg(&logger, "filename=%s size=%d", logName, totalLoggedBytes);
 	}
@@ -304,49 +311,6 @@ static void listDirectory(const char *path) {
 	UNLOCK_SD_SPI;
 }
 
-static int errorReported = FALSE; // this is used to report the error only once
-
-#if 0
-void readLogFileContent(char *buffer, short fileId, short offset, short length) {
-}
-#endif
-
-/**
- * @brief Appends specified line to the current log file
- */
-void appendToLog(const char *line, size_t lineLength) {
-	UINT bytesWritten;
-
-	if (!isSdCardAlive()) {
-		if (!errorReported)
-			scheduleMsg(&logger, "appendToLog Error: No File system is mounted");
-		errorReported = TRUE;
-		return;
-	}
-
-	totalLoggedBytes += lineLength;
-	LOCK_SD_SPI;
-	FRESULT err = f_write(&FDLogFile, line, lineLength, &bytesWritten);
-	if (bytesWritten < lineLength) {
-		printError("write error or disk full", err); // error or disk full
-		mmcUnMount();
-	} else {
-		writeCounter++;
-		totalWritesCounter++;
-		if (writeCounter >= F_SYNC_FREQUENCY) {
-			/**
-			 * Performance optimization: not f_sync after each line, f_sync is probably a heavy operation
-			 * todo: one day someone should actually measure the relative cost of f_sync
-			 */
-			f_sync(&FDLogFile);
-			totalSyncCounter++;
-			writeCounter = 0;
-		}
-	}
-
-	UNLOCK_SD_SPI;
-}
-
 /*
  * MMC card un-mount.
  */
@@ -439,11 +403,49 @@ static void MMCmount(void) {
 	}
 }
 
+class SdLogBufferWriter final : public BufferedWriter<512> {
+	size_t writeInternal(const char* buffer, size_t count) override {
+		size_t bytesWritten;
+
+		totalLoggedBytes += count;
+
+		LOCK_SD_SPI;
+		FRESULT err = f_write(&FDLogFile, buffer, count, &bytesWritten);
+
+		if (bytesWritten != count) {
+			printError("write error or disk full", err); // error or disk full
+			mmcUnMount();
+		} else {
+			writeCounter++;
+			totalWritesCounter++;
+			if (writeCounter >= F_SYNC_FREQUENCY) {
+				/**
+				 * Performance optimization: not f_sync after each line, f_sync is probably a heavy operation
+				 * todo: one day someone should actually measure the relative cost of f_sync
+				 */
+				f_sync(&FDLogFile);
+				totalSyncCounter++;
+				writeCounter = 0;
+			}
+		}
+
+		UNLOCK_SD_SPI;
+		return bytesWritten;
+	}
+};
+
+static SdLogBufferWriter logBuffer MAIN_RAM;
+
 static THD_FUNCTION(MMCmonThread, arg) {
 	(void)arg;
 	chRegSetThreadName("MMC_Monitor");
 
 	while (true) {
+		// if the SPI device got un-picked somehow, cancel SD card
+		if (CONFIG(sdCardSpiDevice) == SPI_NONE) {
+			return;
+		}
+
 		if (CONFIG(debugMode) == DBG_SD_CARD) {
 			tsOutputChannels.debugIntField1 = totalLoggedBytes;
 			tsOutputChannels.debugIntField2 = totalWritesCounter;
@@ -462,7 +464,7 @@ static THD_FUNCTION(MMCmonThread, arg) {
 		}
 
 		if (isSdCardAlive()) {
-			writeLogLine();
+			writeLogLine(logBuffer);
 		} else {
 			chThdSleepMilliseconds(100);
 		}
@@ -485,10 +487,14 @@ void initMmcCard(void) {
 		return;
 	}
 
+	mmcSpiDevice = CONFIG(sdCardSpiDevice);
+
+	efiAssertVoid(OBD_PCM_Processor_Fault, mmcSpiDevice != SPI_NONE, "SD card enabled, but no SPI device configured!");
+
 	// todo: reuse initSpiCs method?
 	hs_spicfg.ssport = ls_spicfg.ssport = getHwPort("mmc", CONFIG(sdCardCsPin));
 	hs_spicfg.sspad = ls_spicfg.sspad = getHwPin("mmc", CONFIG(sdCardCsPin));
-	mmccfg.spip = getSpiDevice(CONFIG(sdCardSpiDevice));
+	mmccfg.spip = getSpiDevice(mmcSpiDevice);
 
 	/**
 	 * FYI: SPI does not work with CCM memory, be sure to have main() stack in RAM, not in CCMRAM
@@ -501,9 +507,6 @@ void initMmcCard(void) {
 	chThdCreateStatic(mmcThreadStack, sizeof(mmcThreadStack), LOWPRIO, (tfunc_t)(void*) MMCmonThread, NULL);
 
 	addConsoleAction("mountsd", MMCmount);
-	addConsoleActionS("appendtolog", [](const char* str) {
-		appendToLog(str, strlen(str));
-	});
 	addConsoleAction("umountsd", mmcUnMount);
 	addConsoleActionS("ls", listDirectory);
 	addConsoleActionS("del", removeFile);

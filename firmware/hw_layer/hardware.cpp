@@ -34,7 +34,7 @@
 //#include "usb_msd.h"
 
 #include "AdcConfiguration.h"
-#include "idle_thread.h"
+#include "idle_hardware.h"
 #include "mcp3208.h"
 #include "hip9011.h"
 #include "histogram.h"
@@ -71,8 +71,6 @@ EXTERN_ENGINE;
 
 extern bool hasFirmwareErrorFlag;
 
-static mutex_t spiMtx;
-
 #if HAL_USE_SPI
 extern bool isSpiInitialized[5];
 
@@ -85,14 +83,12 @@ bool rtcWorks = true;
  * Only one consumer can use SPI bus at a given time
  */
 void lockSpi(spi_device_e device) {
-	UNUSED(device);
 	efiAssertVoid(CUSTOM_STACK_SPI, getCurrentRemainingStack() > 128, "lockSpi");
-	// todo: different locks for different SPI devices!
-	chMtxLock(&spiMtx);
+	spiAcquireBus(getSpiDevice(device));
 }
 
 void unlockSpi(spi_device_e device) {
-	chMtxUnlock(&spiMtx);
+	spiReleaseBus(getSpiDevice(device));
 }
 
 static void initSpiModules(engine_configuration_s *engineConfiguration) {
@@ -143,28 +139,6 @@ SPIDriver * getSpiDevice(spi_device_e spiDevice) {
 }
 #endif
 
-#if HAL_USE_I2C
-#if defined(STM32F7XX)
-// values calculated with STM32CubeMX tool, 100kHz I2C clock for Nucleo-767 @168 MHz, PCK1=42MHz
-#define HAL_I2C_F7_100_TIMINGR 0x00A0A3F7
-static I2CConfig i2cfg = { HAL_I2C_F7_100_TIMINGR, 0, 0 };	// todo: does it work?
-#else /* defined(STM32F4XX) */
-static I2CConfig i2cfg = { OPMODE_I2C, 100000, STD_DUTY_CYCLE, };
-#endif /* defined(STM32F4XX) */
-
-//static char txbuf[1];
-
-static void sendI2Cbyte(int addr, int data) {
-	(void)addr;
-	(void)data;
-//	i2cAcquireBus(&I2CD1);
-//	txbuf[0] = data;
-//	i2cMasterTransmit(&I2CD1, addr, txbuf, 1, NULL, 0);
-//	i2cReleaseBus(&I2CD1);
-}
-
-#endif
-
 static Logging *sharedLogger;
 
 #if EFI_PROD_CODE
@@ -174,7 +148,10 @@ static Logging *sharedLogger;
 static int fastMapSampleIndex;
 static int hipSampleIndex;
 static int tpsSampleIndex;
+
+#if HAL_TRIGGER_USE_ADC
 static int triggerSampleIndex;
+#endif
 
 #if HAL_USE_ADC
 extern AdcDevice fastAdc;
@@ -314,9 +291,9 @@ void stopSpi(spi_device_e device) {
 		return; // not turned on
 	}
 	isSpiInitialized[device] = false;
-	brain_pin_markUnused(getSckPin(device));
-	brain_pin_markUnused(getMisoPin(device));
-	brain_pin_markUnused(getMosiPin(device));
+	efiSetPadUnused(getSckPin(device));
+	efiSetPadUnused(getMisoPin(device));
+	efiSetPadUnused(getMosiPin(device));
 #endif /* HAL_USE_SPI */
 }
 
@@ -339,8 +316,6 @@ void applyNewHardwareSettings(void) {
 	stopJoystickPins();
 #endif /* HAL_USE_PAL && EFI_JOYSTICK */
 
-	enginePins.stopInjectionPins();
-    enginePins.stopIgnitionPins();
 #if EFI_CAN_SUPPORT
 	stopCanPins();
 #endif /* EFI_CAN_SUPPORT */
@@ -396,12 +371,14 @@ void applyNewHardwareSettings(void) {
 	stopBoostPin();
 #endif
 	if (isPinOrModeChanged(clutchUpPin, clutchUpPinMode)) {
-		brain_pin_markUnused(activeConfiguration.clutchUpPin);
+		efiSetPadUnused(activeConfiguration.clutchUpPin);
 	}
 
 	enginePins.unregisterPins();
 
 	ButtonDebounce::startConfigurationList();
+
+
 
 #if EFI_SHAFT_POSITION_INPUT
 	startTriggerInputPins();
@@ -415,8 +392,7 @@ void applyNewHardwareSettings(void) {
 	startHD44780_pins();
 #endif /* #if EFI_HD44780_LCD */
 
-	enginePins.startInjectionPins();
-	enginePins.startIgnitionPins();
+	enginePins.startPins();
 
 #if EFI_CAN_SUPPORT
 	startCanPins();
@@ -433,7 +409,7 @@ void applyNewHardwareSettings(void) {
 
 #if EFI_IDLE_CONTROL
 	if (isIdleRestartNeeded) {
-		 initIdleHardware();
+		 initIdleHardware(sharedLogger);
 	}
 #endif
 
@@ -473,8 +449,6 @@ void initHardware(Logging *l) {
 	// 10 extra seconds to re-flash the chip
 	//flashProtect();
 
-	chMtxObjectInit(&spiMtx);
-
 #if EFI_HISTOGRAMS
 	/**
 	 * histograms is a data structure for CPU monitor, it does not depend on configuration
@@ -495,9 +469,9 @@ void initHardware(Logging *l) {
 
 #ifdef CONFIG_RESET_SWITCH_PORT
 // this pin is not configurable at runtime so that we have a reliable way to reset configuration
-#define SHOULD_INGORE_FLASH() (palReadPad(CONFIG_RESET_SWITCH_PORT, CONFIG_RESET_SWITCH_PIN) == 0)
+#define SHOULD_IGNORE_FLASH() (palReadPad(CONFIG_RESET_SWITCH_PORT, CONFIG_RESET_SWITCH_PIN) == 0)
 #else
-#define SHOULD_INGORE_FLASH() (false)
+#define SHOULD_IGNORE_FLASH() (false)
 #endif // CONFIG_RESET_SWITCH_PORT
 
 #ifdef CONFIG_RESET_SWITCH_PORT
@@ -511,7 +485,7 @@ void initHardware(Logging *l) {
 	 *
 	 * interesting fact that we have another read from flash before we get here
 	 */
-	if (SHOULD_INGORE_FLASH()) {
+	if (SHOULD_IGNORE_FLASH()) {
 		engineConfiguration->engineType = DEFAULT_ENGINE_TYPE;
 		resetConfigurationExt(sharedLogger, engineConfiguration->engineType PASS_ENGINE_PARAMETER_SUFFIX);
 		writeToFlashNow();
@@ -564,6 +538,10 @@ void initHardware(Logging *l) {
 	// output pins potentially depend on 'initSmartGpio'
 	initOutputPins(PASS_ENGINE_PARAMETER_SIGNATURE);
 
+#if EFI_ENGINE_CONTROL
+	enginePins.startPins(PASS_ENGINE_PARAMETER_SIGNATURE);
+#endif /* EFI_ENGINE_CONTROL */
+
 #if EFI_MC33816
 	initMc33816(sharedLogger);
 #endif /* EFI_MC33816 */
@@ -614,30 +592,9 @@ void initHardware(Logging *l) {
 	initServo();
 #endif
 
-#if ADC_SNIFFER
-	initAdcDriver();
-#endif
-
-#if HAL_USE_I2C
-	addConsoleActionII("i2c", sendI2Cbyte);
-#endif
-
 #if EFI_AUX_SERIAL
 	initAuxSerial();
 #endif /* EFI_AUX_SERIAL */
-
-//	USBMassStorageDriver UMSD1;
-
-//	while (true) {
-//		for (int addr = 0x20; addr < 0x28; addr++) {
-//			sendI2Cbyte(addr, 0);
-//			int err = i2cGetErrors(&I2CD1);
-//			print("I2C: err=%x from %d\r\n", err, addr);
-//			chThdSleepMilliseconds(5);
-//			sendI2Cbyte(addr, 255);
-//			chThdSleepMilliseconds(5);
-//		}
-//	}
 
 #if EFI_VEHICLE_SPEED
 	initVehicleSpeed(sharedLogger);

@@ -244,7 +244,7 @@ static void endIntegration(void *) {
 /**
  * Shaft Position callback used to start or finish HIP integration
  */
-static void intHoldCallback(trigger_event_e ckpEventType, uint32_t index, efitick_t edgeTimestamp DECLARE_ENGINE_PARAMETER_SUFFIX) {
+void intHoldCallback(trigger_event_e ckpEventType, uint32_t index, efitick_t edgeTimestamp DECLARE_ENGINE_PARAMETER_SUFFIX) {
 	(void)ckpEventType;
 	// this callback is invoked on interrupt thread
 	if (index != 0)
@@ -386,8 +386,8 @@ static msg_t hipThread(void *arg) {
 
 void stopHip9001_pins() {
 #if EFI_PROD_CODE
-	brain_pin_markUnused(activeConfiguration.hip9011IntHoldPin);
-	brain_pin_markUnused(activeConfiguration.hip9011CsPin);
+	efiSetPadUnused(activeConfiguration.hip9011IntHoldPin);
+	efiSetPadUnused(activeConfiguration.hip9011CsPin);
 #endif /* EFI_PROD_CODE */
 }
 
@@ -422,11 +422,6 @@ void initHip9011(Logging *sharedLogger) {
 	spiStart(driver, &hipSpiCfg);
 
 	instance.currentBandIndex = getBandIndex();
-
-	/**
-	 * this engine cycle callback would be scheduling actual integration start and end callbacks
-	 */
-	addTriggerEventListener(&intHoldCallback, "DD int/hold", engine);
 
 	// MISO PB14
 //	palSetPadMode(GPIOB, 14, PAL_MODE_ALTERNATE(EFI_SPI2_AF) | PAL_STM32_PUDR_PULLUP);
