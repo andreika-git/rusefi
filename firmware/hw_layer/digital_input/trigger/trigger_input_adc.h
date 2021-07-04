@@ -35,7 +35,7 @@ public:
 	float triggerAdcITermMin = 3.125e-8f;	// corresponds to rpm=25
 
 	int transitionCooldown = 5;
-
+	
 	int analogToDigitalTransitionCnt;
 	int digitalToAnalogTransitionCnt;
 

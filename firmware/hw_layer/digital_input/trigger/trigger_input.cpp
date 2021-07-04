@@ -112,6 +112,18 @@ static int turnOnTriggerInputPin(const char *msg, int index, bool isTriggerShaft
 	}
 #endif
 
+	/* ... then ADC */
+#if HAL_TRIGGER_USE_ADC
+	if (adcTriggerTurnOnInputPin(msg, index, isTriggerShaft) >= 0) {
+		if (isTriggerShaft) {
+			shaftTriggerType[index] = TRIGGER_ADC;
+		} else {
+			camTriggerType[index] = TRIGGER_ADC;
+		}
+		return 0;
+	}
+#endif
+
 	/* ... then EXTI */
 	if (extiTriggerTurnOnInputPin(msg, index, isTriggerShaft) >= 0) {
 		if (isTriggerShaft) {
@@ -136,7 +148,7 @@ static void turnOffTriggerInputPin(int index, bool isTriggerShaft) {
 		if (shaftTriggerType[index] == TRIGGER_ICU) {
 			icuTriggerTurnOffInputPin(brainPin);
 		}
-#endif /* EFI_ICU_INPUTS */
+#endif
 		if (shaftTriggerType[index] == TRIGGER_ADC) {
 			adcTriggerTurnOffInputPin(brainPin);
 		}
@@ -151,7 +163,7 @@ static void turnOffTriggerInputPin(int index, bool isTriggerShaft) {
 		if (camTriggerType[index] == TRIGGER_ICU) {
 			icuTriggerTurnOffInputPin(brainPin);
 		}
-#endif /* EFI_ICU_INPUTS */
+#endif
 		if (camTriggerType[index] == TRIGGER_ADC) {
 			adcTriggerTurnOffInputPin(brainPin);
 		}

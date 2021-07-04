@@ -194,6 +194,9 @@ void adc_callback_fast(ADCDriver *adcp) {
 
 #endif /* EFI_FASTER_UNIFORM_ADC */
 
+//!!!!!!!!!!!!
+extern int fast_adc_callback_cnt;
+
 /**
  * This method is not in the adc* lower-level file because it is more business logic then hardware.
  */
@@ -206,6 +209,9 @@ void adc_callback_fast(ADCDriver *adcp) {
 	size_t n = adcp->depth;
 	(void) buffer;
 	(void) n;
+
+	//!!!!!!!!!!!!!!!
+	fast_adc_callback_cnt++;
 
 	ScopePerf perf(PE::AdcCallbackFast);
 

@@ -8,6 +8,7 @@
 
 #include "engine_ptr.h"
 #include "engine_configuration.h"
+#include "adc_inputs.h"
 
 #if HAL_USE_ADC
 
@@ -20,7 +21,7 @@ void portInitAdc() {
 
 #if EFI_USE_FAST_ADC
 	// Init fast ADC (MAP sensor)
-	adcStart(&ADCD2, NULL);
+	adcStart(&ADC_FAST_DEVICE, NULL);
 #endif
 
 	// Enable internal temperature reference
@@ -174,5 +175,83 @@ bool readSlowAnalogInputs(adcsample_t* convertedSamples) {
 
 	return true;
 }
+
+#if EFI_USE_FAST_ADC
+static ADCConversionGroup adcgrpcfgFast = {
+	.circular			= FALSE,
+	.num_channels		= 0,
+	.end_cb				= nullptr,
+	.error_cb			= nullptr,
+	/* HW dependent part.*/
+	.cr1				= 0,
+	.cr2				= ADC_CR2_SWSTART,
+		/**
+		 * here we configure all possible channels for fast mode. Some channels would not actually
+         * be used hopefully that's fine to configure all possible channels.
+		 *
+		 */
+	// sample times for channels 10...18
+	.smpr1 =
+		ADC_SMPR1_SMP_AN10(ADC_SAMPLING_FAST) |
+		ADC_SMPR1_SMP_AN11(ADC_SAMPLING_FAST) |
+		ADC_SMPR1_SMP_AN12(ADC_SAMPLING_FAST) |
+		ADC_SMPR1_SMP_AN13(ADC_SAMPLING_FAST) |
+		ADC_SMPR1_SMP_AN14(ADC_SAMPLING_FAST) |
+		ADC_SMPR1_SMP_AN15(ADC_SAMPLING_FAST),
+	// In this field must be specified the sample times for channels 0...9
+	.smpr2 =
+		ADC_SMPR2_SMP_AN0(ADC_SAMPLING_FAST) |
+		ADC_SMPR2_SMP_AN1(ADC_SAMPLING_FAST) |
+		ADC_SMPR2_SMP_AN2(ADC_SAMPLING_FAST) |
+		ADC_SMPR2_SMP_AN3(ADC_SAMPLING_FAST) |
+		ADC_SMPR2_SMP_AN4(ADC_SAMPLING_FAST) |
+		ADC_SMPR2_SMP_AN5(ADC_SAMPLING_FAST) |
+		ADC_SMPR2_SMP_AN6(ADC_SAMPLING_FAST) |
+		ADC_SMPR2_SMP_AN7(ADC_SAMPLING_FAST) |
+		ADC_SMPR2_SMP_AN8(ADC_SAMPLING_FAST) |
+		ADC_SMPR2_SMP_AN9(ADC_SAMPLING_FAST),
+	.htr				= 0,
+	.ltr				= 0,
+	.sqr1				= 0, // Conversion group sequence 13...16 + sequence length
+	.sqr2				= 0, // Conversion group sequence 7...12
+	.sqr3				= 0, // Conversion group sequence 1...6
+#if ADC_MAX_CHANNELS_COUNT > 16
+	.sqr4				= 0, // Conversion group sequence 19...24
+	.sqr5				= 0  // Conversion group sequence 25...30
+#endif /* ADC_MAX_CHANNELS_COUNT */
+};
+
+void portInitFastAdc(adccallback_t endCallback) {
+	adcgrpcfgFast.end_cb = endCallback;
+}
+
+ADCConversionGroup *getFastAdcConversionGroup() {
+	return &adcgrpcfgFast;
+}
+
+void enableAdcChannel(ADCConversionGroup *hwConfig, adc_channel_e hwChannel, int logicChannel) {
+	/* TODO: following is correct for STM32 ADC1/2.
+	 * ADC3 has another input to gpio mapping
+	 * and should be handled separately */
+	size_t channelAdcIndex = hwChannel - EFI_ADC_0;
+
+	if (logicChannel < 6) {
+		hwConfig->sqr3 |= channelAdcIndex << (5 * logicChannel);
+	} else if (logicChannel < 12) {
+		hwConfig->sqr2 |= channelAdcIndex << (5 * (logicChannel - 6));
+	} else if (logicChannel < 18) {
+		hwConfig->sqr1 |= channelAdcIndex << (5 * (logicChannel - 12));
+	}
+#if ADC_MAX_CHANNELS_COUNT > 16
+	else if (logicChannel < 24) {
+		hwConfig->sqr4 |= channelAdcIndex << (5 * (logicChannel - 18));
+	}
+	else if (logicChannel < 30) {
+		hwConfig->sqr5 |= channelAdcIndex << (5 * (logicChannel - 24));
+	}
+#endif /* ADC_MAX_CHANNELS_COUNT */
+}
+
+#endif /* EFI_USE_FAST_ADC */
 
 #endif // HAL_USE_ADC

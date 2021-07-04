@@ -7,7 +7,6 @@
  * @author Andrey Belomutskiy, (c) 2012-2020
  */
  
-#include "global.h"
 #include "trigger_input_adc.h"
 
 
@@ -76,6 +75,7 @@ void setTriggerAdcMode(triggerAdcMode_t adcMode) {
 
 static void shaft_callback(void *arg) {
 	// do the time sensitive things as early as possible!
+	efitick_t stamp = getTimeNowNt();
 	ioline_t pal_line = (ioline_t)arg;
 	bool rise = (palReadLine(pal_line) == PAL_HIGH);
 
@@ -106,7 +106,7 @@ static void printDumpBuf(void) {
 
 int adcTriggerTurnOnInputPin(const char *msg, int index, bool isTriggerShaft) {
 	brain_pin_e brainPin = isTriggerShaft ?
-		engineConfiguration->triggerInputPins[index] : engineConfiguration->camInputs[index];
+		CONFIG(triggerInputPins)[index] : engineConfiguration->camInputs[index];
 
 	if (!isBrainPinValid(brainPin))
 		return 0;
@@ -147,7 +147,7 @@ void adcTriggerTurnOnInputPins() {
 
 adc_channel_e getAdcChannelForTrigger(void) {
 	// todo: add other trigger or cam channels?
-	brain_pin_e brainPin = engineConfiguration->triggerInputPins[0];
+	brain_pin_e brainPin = CONFIG(triggerInputPins)[0];
 	if (!isBrainPinValid(brainPin))
 		return EFI_ADC_NONE;
 	return getAdcChannel(brainPin);
@@ -162,7 +162,7 @@ void addAdcChannelForTrigger(void) {
 
 void onTriggerChanged(efitick_t stamp, bool isPrimary, bool isRising) {
 #ifdef TRIGGER_ADC_DEBUG_LED
-	toggleLed(0, 0);
+	toggleLed(0, isRising ? -1 : 1);
 #endif /* TRIGGER_ADC_DEBUG_LED */
 
 #if 1
@@ -176,10 +176,7 @@ void onTriggerChanged(efitick_t stamp, bool isPrimary, bool isRising) {
 
 #endif /* EFI_SHAFT_POSITION_INPUT && HAL_TRIGGER_USE_ADC && HAL_USE_ADC */
 
-
 void TriggerAdcDetector::init(DECLARE_ENGINE_PARAMETER_SIGNATURE) {
-#if ! EFI_SIMULATOR
-
 	// todo: move some of these to config
 
 	// 4.7k||5.1k + 4.7k
@@ -202,7 +199,7 @@ void TriggerAdcDetector::init(DECLARE_ENGINE_PARAMETER_SIGNATURE) {
 	const triggerAdcSample_t adcDeltaThreshold = triggerVoltsToAdcDivided(0.25f);
 	adcDefaultThreshold = triggerVoltsToAdcDivided(2.5f);	// this corresponds to VREF1 on Hellen boards
 	adcMinThreshold = adcDefaultThreshold - adcDeltaThreshold;
-	adcMaxThreshold = adcDefaultThreshold - adcDeltaThreshold;
+	adcMaxThreshold = adcDefaultThreshold + adcDeltaThreshold;
 
 	// these thresholds allow to switch from ADC mode to EXTI mode, indicating the clamping of the signal
 	// they should exceed the MCU schmitt trigger thresholds (usually 0.3*Vdd and 0.7*Vdd)
@@ -212,7 +209,6 @@ void TriggerAdcDetector::init(DECLARE_ENGINE_PARAMETER_SIGNATURE) {
 	modeSwitchCnt = 0;
 
 	reset();
-#endif // EFI_SIMULATOR
 }
 
 void TriggerAdcDetector::reset() {
@@ -238,7 +234,7 @@ void TriggerAdcDetector::digitalCallback(efitick_t stamp, bool isPrimary, bool r
 	if (curAdcMode != TRIGGER_ADC_EXTI) {
 		return;
 	}
-
+	
 	onTriggerChanged(stamp, isPrimary, rise);
 
 	if ((stamp - prevStamp) > minDeltaTimeForStableAdcDetectionNt) {
@@ -263,7 +259,6 @@ void TriggerAdcDetector::digitalCallback(efitick_t stamp, bool isPrimary, bool r
 }
 
 void TriggerAdcDetector::analogCallback(efitick_t stamp, triggerAdcSample_t value) {
-#if ! EFI_SIMULATOR
 	if (curAdcMode != TRIGGER_ADC_ADC) {
 		return;
 	}
@@ -402,7 +397,6 @@ void TriggerAdcDetector::analogCallback(efitick_t stamp, triggerAdcSample_t valu
 	
 	prevValue = transition;
 	prevStamp = stamp;
-#endif // EFI_SIMULATOR
 }
 
 triggerAdcMode_t getTriggerAdcMode(void) {

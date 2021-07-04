@@ -17,7 +17,13 @@ void portInitAdc();
 float getMcuTemperature();
 // Convert all slow ADC inputs.  Returns true if the conversion succeeded, false if a failure occured.
 bool readSlowAnalogInputs(adcsample_t* convertedSamples);
-#endif
+
+#if EFI_USE_FAST_ADC
+void portInitFastAdc(adccallback_t endCallback);
+ADCConversionGroup *getFastAdcConversionGroup();
+void enableAdcChannel(ADCConversionGroup *hwConfig, adc_channel_e hwChannel, int logicChannel);
+#endif /* EFI_USE_FAST_ADC */
+#endif /* HAL_USE_ADC */
 
 // CAN bus
 #if HAL_USE_CAN

@@ -18,6 +18,8 @@ typedef uint32_t iomode_t;
 typedef uint32_t ioportid_t;
 typedef uint32_t ioportmask_t;
 
+typedef uint16_t triggerAdcSample_t;
+
 #define DL_OUTPUT_BUFFER 200
 
 // just a stub implementation for unit tests
@@ -52,7 +54,7 @@ void chDbgAssert(int c, char *msg, void *arg);
 #endif /* __cplusplus */
 
 
-#define US_TO_NT_MULTIPLIER 100
+#define US_TO_NT_MULTIPLIER 4
 #define VCS_VERSION "321"
 #define RUS_EFI_VERSION_TAG "rusEfiVersion"
 

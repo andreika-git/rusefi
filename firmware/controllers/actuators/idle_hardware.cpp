@@ -37,12 +37,15 @@ static SimplePwm idleSolenoidClose("idle close");
 
 extern efitimeus_t timeToStopIdleTest;
 
+static percent_t oldPosition = -1.0f;
+
 void applyIACposition(percent_t position DECLARE_ENGINE_PARAMETER_SUFFIX) {
-	bool prettyClose = absF(position - engine->engineState.idle.currentIdlePosition) < idlePositionSensitivityThreshold;
+	bool prettyClose = absF(position - oldPosition/*engine->engineState.idle.currentIdlePosition*/) < idlePositionSensitivityThreshold;
 	// The threshold is dependent on IAC type (see initIdleHardware())
 	if (prettyClose) {
 		return; // value is pretty close, let's leave the poor valve alone
 	}
+	oldPosition = position;
 
 	
 	/**
@@ -50,7 +53,6 @@ void applyIACposition(percent_t position DECLARE_ENGINE_PARAMETER_SUFFIX) {
 	 * todo: unify?
 	 */
 	float duty = PERCENT_TO_DUTY(position);
-
 	if (CONFIG(useETBforIdleControl)) {
 #if EFI_ELECTRONIC_THROTTLE_BODY
 		setEtbIdlePosition(position PASS_ENGINE_PARAMETER_SUFFIX);

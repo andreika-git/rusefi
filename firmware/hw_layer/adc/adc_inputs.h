@@ -71,14 +71,11 @@ void removeChannel(const char *name, adc_channel_e setting);
 #define GPT_PERIOD_FAST 10  /* PWM period (in PWM ticks).    */
 #endif /* GPT_FREQ_FAST GPT_PERIOD_FAST */
 
-// This callback is called by the ADC driver when a new fast ADC sample is ready
-void onFastAdcComplete(adcsample_t* samples);
+// is there a reason to have this configurable at runtime?
+#ifndef ADC_FAST_DEVICE
+#define ADC_FAST_DEVICE ADCD2
+#endif /* ADC_FAST_DEVICE */
 
-
-using FastAdcToken = size_t;
-
-FastAdcToken enableFastAdcChannel(const char* msg, adc_channel_e channel);
-adcsample_t getFastAdc(FastAdcToken token);
 #else
 #define getAdcValue(msg, channel) 0
 #endif /* HAL_USE_ADC */

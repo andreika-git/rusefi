@@ -77,6 +77,7 @@ extern bool main_loop_started;
 #include "vehicle_speed.h"
 #include "single_timer_executor.h"
 #include "periodic_task.h"
+#include "trigger_input.h"
 extern int icuRisingCallbackCounter;
 extern int icuFallingCallbackCounter;
 #endif /* EFI_PROD_CODE */
@@ -776,6 +777,11 @@ void updateTunerStudioState(TunerStudioOutputChannels *tsOutputChannels DECLARE_
 
 		tsOutputChannels->debugFloatField1 = engine->triggerCentral.getHwEventCounter((int)SHAFT_PRIMARY_RISING);
 		tsOutputChannels->debugFloatField2 = engine->triggerCentral.getHwEventCounter((int)SHAFT_SECONDARY_RISING);
+
+#if EFI_PROD_CODE && HAL_TRIGGER_USE_ADC == TRUE
+		tsOutputChannels->debugFloatField3 = getTriggerAdcThreshold();
+		tsOutputChannels->debugFloatField4 = getTriggerAdcModeCnt();
+#endif /* EFI_PROD_CODE */
 
 		tsOutputChannels->debugIntField4 = engine->triggerCentral.triggerState.currentCycle.eventCount[0];
 		tsOutputChannels->debugIntField5 = engine->triggerCentral.triggerState.currentCycle.eventCount[1];

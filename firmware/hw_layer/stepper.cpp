@@ -129,7 +129,7 @@ void StepperMotor::ThreadTask() {
 		}
 
 		if (targetPosition == currentPosition) {
-			m_hw->pause();
+			m_hw->sleep();
 			continue;
 		}
 
@@ -191,8 +191,12 @@ bool StepDirectionStepper::pulse() {
 	return true;
 }
 
-void StepperHw::pause() const {
-	chThdSleepMicroseconds((int)(MS2US(m_reactionTime)));
+void StepperHw::sleep(void) {
+	pause();
+}
+
+void StepperHw::pause(int divisor) const {
+	chThdSleepMicroseconds((int)(MS2US(m_reactionTime)) / divisor);
 }
 
 void StepperHw::setReactionTime(float ms) {

@@ -40,6 +40,9 @@
 #define PAL_MODE_ALTERNATIVE_CAN	0x5
 #define PAL_MODE_ALTERNATIVE_EXTINT 0x6
 
+// needed for trigger_adc
+#define PAL_MODE_EXTINT PAL_MODE_ALTERNATE(PAL_MODE_ALTERNATIVE_EXTINT)
+
 /*
  * UART driver system settings.
  */

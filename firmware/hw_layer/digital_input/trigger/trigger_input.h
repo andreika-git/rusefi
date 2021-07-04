@@ -13,6 +13,7 @@
 #include "trigger_structure.h"
 #include "trigger_central.h"
 
+
 #define TRIGGER_BAIL_IF_DISABLED          \
     if (!engine->hwTriggerInputEnabled) { \
 		return;                           \
@@ -37,8 +38,6 @@ void startTriggerDebugPins(DECLARE_ENGINE_PARAMETER_SIGNATURE);
 
 #if HAL_USE_ADC
 typedef adcsample_t triggerAdcSample_t;
-#else
-typedef uint16_t triggerAdcSample_t;
 #endif /* HAL_USE_ADC */
 
 // This detector has 2 modes for low-RPM (ADC) and fast-RPM (EXTI)
@@ -53,4 +52,7 @@ void addAdcChannelForTrigger(void);
 void triggerAdcCallback(triggerAdcSample_t value);
 
 void setTriggerAdcMode(triggerAdcMode_t adcMode);
+triggerAdcMode_t getTriggerAdcMode(void);
+int getTriggerAdcModeCnt(void);
+float getTriggerAdcThreshold(void);
 void onTriggerChanged(efitick_t stamp, bool isPrimary, bool isRising);

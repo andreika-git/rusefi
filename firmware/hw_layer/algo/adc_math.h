@@ -20,6 +20,7 @@
 #define adcToVolts(adc) ((engineConfiguration->adcVcc) / ADC_MAX_VALUE * (adc))
 
 #define voltsToAdc(volts) ((volts) * (ADC_MAX_VALUE / (engineConfiguration->adcVcc)))
+#define voltsToAdcDivided(volts) (voltsToAdc(volts) / engineConfiguration->analogInputDividerCoefficient)
 
 float getVoltage(const char *msg, adc_channel_e channel DECLARE_ENGINE_PARAMETER_SUFFIX);
 

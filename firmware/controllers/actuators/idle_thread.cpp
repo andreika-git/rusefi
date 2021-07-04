@@ -344,6 +344,8 @@ static void blipIdle(int idlePosition, int durationMs) {
 	}
 	blipIdlePosition = idlePosition;
 	timeToStopBlip = getTimeNowUs() + 1000 * durationMs;
+
+	efiPrintf("Starting blip idle pos=%d duration=%d", (int)blipIdlePosition, durationMs);
 }
 
 static void finishIdleTestIfNeeded() {
@@ -354,6 +356,7 @@ static void finishIdleTestIfNeeded() {
 static void undoIdleBlipIfNeeded() {
 	if (timeToStopBlip != 0 && getTimeNowUs() > timeToStopBlip) {
 		timeToStopBlip = 0;
+		efiPrintf("Stopped blip idle!");
 	}
 }
 
