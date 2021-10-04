@@ -45,8 +45,6 @@ void applyIACposition(percent_t position DECLARE_ENGINE_PARAMETER_SUFFIX) {
 	if (prettyClose) {
 		return; // value is pretty close, let's leave the poor valve alone
 	}
-	oldPosition = position;
-
 	
 	/**
 	 * currently idle level is an percent value (0-100 range), and PWM takes a float in the 0..1 range
@@ -59,7 +57,9 @@ void applyIACposition(percent_t position DECLARE_ENGINE_PARAMETER_SUFFIX) {
 #endif // EFI_ELECTRONIC_THROTTLE_BODY
 #if ! EFI_UNIT_TEST
 	} else if (CONFIG(useStepperIdle)) {
-		iacMotor.setTargetPosition(duty * engineConfiguration->idleStepperTotalSteps);
+		if (!iacMotor.setTargetPosition(duty * engineConfiguration->idleStepperTotalSteps)) {
+			return;
+		}
 #endif /* EFI_UNIT_TEST */
 	} else {
 		// if not spinning or running a bench test, turn off the idle valve(s) to be quieter and save power
@@ -83,6 +83,9 @@ void applyIACposition(percent_t position DECLARE_ENGINE_PARAMETER_SUFFIX) {
 			idleSolenoidClose.setSimplePwmDutyCycle(idle_close);
 		}
 	}
+
+	// save the position only if it was set successfully
+	oldPosition = position;
 }
 
 #if !EFI_UNIT_TEST
