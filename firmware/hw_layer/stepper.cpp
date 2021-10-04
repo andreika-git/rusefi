@@ -38,8 +38,14 @@ void StepperMotor::changeCurrentPosition(bool positive) {
 	if (positive) {
 		m_currentPosition++;
 	} else {
-		m_currentPosition--;
+		// decrement the position, but use lower limit
+		// (we cannot store negative values in the backup registers) - see saveStepperPos()
+		m_currentPosition = maxI(m_currentPosition - 1, -1);
 	}
+	// save position to backup RTC register
+#if EFI_PROD_CODE
+	saveStepperPos(m_currentPosition);
+#endif
 	postCurrentPosition();
 }
 
@@ -138,11 +144,6 @@ void StepperMotor::ThreadTask() {
 		if (m_hw->step(isIncrementing)) {
 			changeCurrentPosition(isIncrementing);
 		}
-
-		// save position to backup RTC register
-#if EFI_PROD_CODE
-		saveStepperPos(m_currentPosition);
-#endif
 	}
 }
 
@@ -152,11 +153,13 @@ int StepperMotor::getTargetPosition() const {
 	return m_targetPosition;
 }
 
-void StepperMotor::setTargetPosition(int targetPosition) {
+bool StepperMotor::setTargetPosition(int targetPosition) {
 	// we accept a new target position only if the motor is powered from the main relay
 	if (engine->isMainRelayEnabled()) {
 		m_targetPosition = targetPosition;
+		return true;
 	}
+	return false;
 }
 
 bool StepperMotor::isBusy() const {
