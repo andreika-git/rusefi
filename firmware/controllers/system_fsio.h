@@ -34,7 +34,8 @@
 //MAIN_RELAY_LOGIC=(!in_mr_bench) & ((vbatt > 5) | in_shutdown)
 
 // Human-readable: (!in_mr_bench) & (vbatt > 5)
-#define MAIN_RELAY_LOGIC "in_mr_bench ! vbatt 5 > &"
+//#define MAIN_RELAY_LOGIC "in_mr_bench ! vbatt 5 > &"
+#define MAIN_RELAY_LOGIC "in_mr_bench ! vbatt 5 > in_shutdown | &"
 // could be used for simple variable intake geometry setups or warning light or starter block
 
 // Human-readable: rpm > fsio_setting(1)
