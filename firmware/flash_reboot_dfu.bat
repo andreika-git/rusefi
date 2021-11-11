@@ -4,5 +4,5 @@ rem flashes DFU
 rem
 
 java -jar ../java_console_binary/rusefi_console.jar reboot_dfu
-sleep 10
+sleep 5
 ..\misc\install\DfuSe\DfuSeCommand.exe -c -d --fn deliver/rusefi.dfu
