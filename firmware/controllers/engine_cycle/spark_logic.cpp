@@ -45,7 +45,8 @@ static void fireSparkBySettingPinLow(IgnitionEvent *event, IgnitionOutputPin *ou
 		warning(ObdCode::CUSTOM_OUT_OF_ORDER_COIL, "out-of-order coil off %s", output->getName());
 		output->outOfOrder = true;
 	}
-	output->setLow();
+	//!!!!!!!!!!
+	//output->setLow();
 }
 
 static void assertPinAssigned(IgnitionOutputPin* output) {
@@ -166,7 +167,8 @@ static void fireTrailingSpark(IgnitionOutputPin* pin) {
 #if SPARK_EXTREME_LOGGING
 	efiPrintf("fireTrailingSpark %s", pin->name);
 #endif /* SPARK_EXTREME_LOGGING */
-	pin->setLow();
+	//!!!!!!!!!!!!!!
+	//pin->setLow();
 }
 
 static void overFireSparkAndPrepareNextSchedule(IgnitionEvent *event) {
