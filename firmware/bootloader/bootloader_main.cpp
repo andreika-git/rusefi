@@ -9,6 +9,54 @@ extern "C" {
 	#include "shared_params.h"
 }
 
+#define RCC_AHB1ENR (*((volatile unsigned long *)0x40023830))
+#define GPIOG_MODER (*((volatile unsigned long *)0x40021800))
+#define GPIOG_ODR (*((volatile unsigned long *)0x40021814))
+
+void blink_led(void) {
+    // Enable clock for GPIOG
+    asm volatile (
+        "ldr r0, =%[rcc]\n"
+        "ldr r1, [r0]\n"
+        "orr r1, r1, #(1 << 6)\n" // Enable GPIOG clock
+        "str r1, [r0]\n"
+        :: [rcc] "i" (0x40023830)
+        : "r0", "r1"
+    );
+
+    // Configure PG1 as output
+    asm volatile (
+        "ldr r0, =%[moder]\n"
+        "ldr r1, [r0]\n"
+        "bic r1, r1, #(3 << (2 * 1))\n" // Clear bits for PG1
+        "orr r1, r1, #(1 << (2 * 1))\n" // Set PG1 as output
+        "str r1, [r0]\n"
+        :: [moder] "i" (0x40021800)
+        : "r0", "r1"
+    );
+
+    // Infinite loop to blink the LED on PG1
+    asm volatile (
+        "ldr r0, =%[odr]\n"
+        "blink_loop:\n"
+        "ldr r1, [r0]\n"
+        "eor r1, r1, #(1 << 1)\n" // Toggle PG1
+        "str r1, [r0]\n"
+
+        // Delay loop
+        "ldr r2, =%[delay_val]\n"
+        "delay_loop:\n"
+        "subs r2, r2, #1\n"
+        "bne delay_loop\n"
+
+        "b blink_loop\n"
+        :: [odr] "i" (0x40021814),
+           [delay_val] "i" (1000000)
+        : "r0", "r1", "r2"
+    );
+}
+
+
 static blt_bool waitedLongerThanTimeout = BLT_FALSE;
 
 class BlinkyThread : public chibios_rt::BaseStaticThread<256> {

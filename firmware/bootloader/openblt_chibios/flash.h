@@ -28,6 +28,17 @@
 #ifndef FLASH_H
 #define FLASH_H
 
+
+// should match the 'bootloader_size' from the .ld file
+#ifdef STM32H7XX
+// todo: it seems it doesn't match bootloader_size?
+#define BOOTLOADER_SIZE (128 * 1024)
+#else
+#define BOOTLOADER_SIZE (32 * 1024)
+#endif
+
+#define OFFSET_AFTER_BOOTLOADER (FLASH_BASE + BOOTLOADER_SIZE)
+
 /****************************************************************************************
 * Function prototypes
 ****************************************************************************************/
@@ -40,6 +51,8 @@ blt_bool FlashVerifyChecksum(void);
 blt_bool FlashDone(void);
 blt_addr FlashGetUserProgBaseAddress(void);
 blt_bool isFlashDualBank(void);
+
+blt_bool is2ndBootloader(void);
 
 #endif /* FLASH_H */
 /*********************************** end of flash.h ************************************/

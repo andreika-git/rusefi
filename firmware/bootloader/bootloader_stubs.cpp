@@ -24,7 +24,6 @@ void setPinConfigurationOverrides() { }
 void irqEnterHook() {}
 void irqExitHook() {}
 void contextSwitchHook() {}
-void threadInitHook(void*) {}
 void onLockHook() {}
 void onUnlockHook() {}
 //#endif /* ENABLE_PERF_TRACE */

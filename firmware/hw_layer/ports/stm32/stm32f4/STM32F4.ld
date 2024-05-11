@@ -109,6 +109,10 @@ REGION_ALIAS("HEAP_RAM", ram0);
 /* RAM region to be used for SDRAM segment.*/
 REGION_ALIAS("SDRAM_RAM", ram7);
 
+/* Flash & RAM regions to be used for GOT.*/
+REGION_ALIAS("GOT_RAM", ram4);
+REGION_ALIAS("GOT_FLASH_LMA", flash0);
+
 SECTIONS
 {
   /* Bootloader section */
@@ -137,3 +141,14 @@ SECTIONS
 
 /* Generic rules inclusion.*/
 INCLUDE rules.ld
+
+SECTIONS
+{
+  .got : ALIGN(4)
+  {
+    __got_flash_base__ = LOADADDR(.got);
+    __got_start__ = .;
+    *(.got)
+    __got_end__ = .;
+  } > GOT_RAM AT > GOT_FLASH_LMA
+}

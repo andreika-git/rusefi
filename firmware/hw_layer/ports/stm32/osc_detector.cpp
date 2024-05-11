@@ -141,8 +141,11 @@ static void reprogramPll(uint8_t roundedHseMhz) {
 #endif
 
 #ifdef __cplusplus
+extern "C" PUBLIC_API_WEAK void __late_init_custom() { }
+
 // __late_init runs after bss/zero initialziation, but before static constructors and main
 extern "C" void __late_init() {
+	__late_init_custom();
 #else
 void OscDetector() {
 #endif

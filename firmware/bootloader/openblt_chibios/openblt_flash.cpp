@@ -11,16 +11,20 @@ void FlashInit() {
 }
 
 blt_addr FlashGetUserProgBaseAddress() {
-#ifdef STM32H7XX
-	return FLASH_BASE + 128 * 1024;
-#else // not STM32H7
-	return FLASH_BASE + 32 * 1024;
-#endif
+	if (is2ndBootloader())
+		return FLASH_BASE;
+	return OFFSET_AFTER_BOOTLOADER;
+}
+
+static blt_bool isInsideBootloader(blt_addr addr) {
+	if (is2ndBootloader())
+		return (addr >= OFFSET_AFTER_BOOTLOADER);
+	return (addr < OFFSET_AFTER_BOOTLOADER);
 }
 
 blt_bool FlashWrite(blt_addr addr, blt_int32u len, blt_int8u *data) {
 	// don't allow overwriting the bootloader
-	if (addr < FlashGetUserProgBaseAddress()) {
+	if (isInsideBootloader(addr)) {
 		return BLT_FALSE;
 	}
 
@@ -31,7 +35,7 @@ blt_bool FlashWrite(blt_addr addr, blt_int32u len, blt_int8u *data) {
 
 blt_bool FlashErase(blt_addr addr, blt_int32u len) {
 	// don't allow erasing the bootloader
-	if (addr < FlashGetUserProgBaseAddress()) {
+	if (isInsideBootloader(addr)) {
 		return BLT_FALSE;
 	}
 
