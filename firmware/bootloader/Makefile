@@ -23,8 +23,8 @@ DDEFS += -DEFI_USE_UART_DMA=FALSE
 
 DDEFS += -DEFI_USB_SERIAL=TRUE -DHAL_USE_USB_MSD=FALSE
 
-# Disable std initializers, we'll do them in our __late_init_custom() with proper relocations
-DADEFS += -DCRT0_INIT_DATA=FALSE -DCRT0_CALL_CONSTRUCTORS=FALSE -DCRT0_INIT_RAM_AREAS=FALSE
+# Disable std initializers, we'll do them in __core_init() with proper relocations
+DADEFS += -DCRT0_INIT_DATA=FALSE -DCRT0_INIT_BSS=FALSE -DCRT0_VTOR_INIT=FALSE -DCRT0_INIT_RAM_AREAS=FALSE -DCRT0_CALL_CONSTRUCTORS=FALSE
 
 # Cache is disabled on F7, H7
 DDEFS += -DSTM32_SRAM2_NOCACHE=FALSE -DSTM32_NOCACHE_SRAM1_SRAM2=FALSE -DSTM32_NOCACHE_SRAM3=FALSE
@@ -37,7 +37,7 @@ ifeq ($(USE_OPT),)
 endif
 
 # Configure the linker script to build the bootloader, not the firmware
-USE_OPT += -fPIC -msingle-pic-base -mno-pic-data-is-text-relative -mpic-register=r9 -Wl,--defsym=IS_BOOTLOADER=1 -Wl,-pie
+USE_OPT += -fPIC -Wl,--defsym=IS_BOOTLOADER=1
 
 # C specific options here (added to USE_OPT).
 ifeq ($(USE_COPT),)

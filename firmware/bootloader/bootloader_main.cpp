@@ -13,6 +13,7 @@ extern "C" {
 #define GPIOG_MODER (*((volatile unsigned long *)0x40021800))
 #define GPIOG_ODR (*((volatile unsigned long *)0x40021814))
 
+extern "C" {
 void blink_led(void) {
     // Enable clock for GPIOG
     asm volatile (
@@ -55,7 +56,7 @@ void blink_led(void) {
         : "r0", "r1", "r2"
     );
 }
-
+}
 
 static blt_bool waitedLongerThanTimeout = BLT_FALSE;
 
@@ -95,17 +96,20 @@ protected:
 		}
 
 		while (true) {
-			if (yellowPort) {
-				palTogglePad(yellowPort, yellowPin);
-			}
-			if (bluePort) {
-				palTogglePad(bluePort, bluePin);
-			}
-			if (greenPort) {
-				palTogglePad(greenPort, greenPin);
-			}
-			if (redPort) {
-				palTogglePad(redPort, redPin);
+			if (is2ndBootloader()) {
+				if (yellowPort) {
+					palTogglePad(yellowPort, yellowPin);
+				}
+				if (bluePort) {
+					palTogglePad(bluePort, bluePin);
+				}
+			} else {
+				if (greenPort) {
+					palTogglePad(greenPort, greenPin);
+				}
+				if (redPort) {
+					palTogglePad(redPort, redPin);
+				}
 			}
 			// blink 3 times faster if Dual Bank is not enabled
 			auto delay = isFlashDualBank() ? 125 : 40;
@@ -164,7 +168,9 @@ int main(void) {
 #endif // BOOT_BACKDOOR_ENTRY_TIMEOUT_MS
 		if (isTimeout == BLT_TRUE) {
 			waitedLongerThanTimeout = BLT_TRUE;
-			CpuStartUserProgram();
+			if (!is2ndBootloader()) {
+				CpuStartUserProgram();
+			}
 		}
 	}
 }

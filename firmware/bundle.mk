@@ -5,6 +5,7 @@ ifeq (,$(BUNDLE_NAME))
 endif
 
 # If we're running on Windows, we need to call the .exe of hex2dfu
+UNAME_S := $(shell uname -s)
 ifneq (,$(findstring NT,$(UNAME_S)))
 	H2D = ../misc/encedo_hex2dfu/hex2dfu.exe
 else
@@ -163,15 +164,26 @@ endif
 	@touch $@
 
 OBFUSCATED_SREC = $(FOLDER)/rusefi-obfuscated.srec
+OBFUSCATED_BOOTLOADER_SREC = $(FOLDER)/openblt-obfuscated.srec
 
 OBFUSCATED_OUT = \
   $(FOLDER)/rusefi-obfuscated.bin \
   $(OBFUSCATED_SREC)
 
+OBFUSCATED_BOOTLOADER_UOUT = \
+  $(FOLDER)/openblt-obfuscated.bin \
+  $(OBFUSCATED_BOOTLOADER_SREC)
+
 $(OBFUSCATED_OUT): .obfuscated-sentinel
+
+$(OBFUSCATED_BOOTLOADER_OUT): .obfuscated-bootloader-sentinel
 
 .obfuscated-sentinel: $(BUILDDIR)/$(PROJECT).bin
 	[ -z "$(POST_BUILD_SCRIPT)" ] || bash $(POST_BUILD_SCRIPT) $(BUILDDIR)/$(PROJECT).bin $(OBFUSCATED_OUT)
+	@touch $@
+
+.obfuscated-bootloader-sentinel: $(BOOTLOADER_BIN_OUT)
+	[ -z "$(POST_BUILD_SCRIPT)" ] || bash $(POST_BUILD_SCRIPT) $(BOOTLOADER_BIN_OUT) $(OBFUSCATED_BOOTLOADER_OUT)
 	@touch $@
 
 $(ST_DRIVERS): | $(DRIVERS_FOLDER)
@@ -183,15 +195,15 @@ $(DELIVER) $(ARTIFACTS) $(FOLDER) $(CONSOLE_FOLDER) $(DRIVERS_FOLDER):
 $(ARTIFACTS)/$(BUNDLE_FULL_NAME).zip: $(BUNDLE_FILES) | $(ARTIFACTS)
 	zip -r $@ $(BUNDLE_FILES)
 
-$(ARTIFACTS)/$(BUNDLE_FULL_NAME)_obfuscated_public.zip:  $(OBFUSCATED_OUT) $(BUNDLE_FILES) | $(ARTIFACTS)
-	zip -r $@ $(FULL_BUNDLE_CONTENT) $(MOST_COMMON_BUNDLE_FILES) $(OBFUSCATED_SREC)
+$(ARTIFACTS)/$(BUNDLE_FULL_NAME)_obfuscated_public.zip:  $(OBFUSCATED_OUT) $(OBFUSCATED_BOOTLOADER_OUT) $(BUNDLE_FILES) | $(ARTIFACTS)
+	zip -r $@ $(FULL_BUNDLE_CONTENT) $(MOST_COMMON_BUNDLE_FILES) $(OBFUSCATED_SREC) $(OBFUSCATED_BOOTLOADER_SREC)
 
 # The autopdate zip doesn't have a folder with the bundle contents
 $(ARTIFACTS)/$(BUNDLE_FULL_NAME)_autoupdate.zip: $(UPDATE_BUNDLE_FILES) | $(ARTIFACTS)
 	cd $(FOLDER) &&	zip -r ../$@ $(subst $(FOLDER)/,,$(UPDATE_BUNDLE_FILES))
 
-$(ARTIFACTS)/$(BUNDLE_FULL_NAME)_obfuscated_public_autoupdate.zip:  $(OBFUSCATED_OUT) $(BUNDLE_FILES) | $(ARTIFACTS)
-	cd $(FOLDER) &&	zip -r ../$@ $(subst $(FOLDER)/,,$(MOST_COMMON_BUNDLE_FILES)) $(subst $(FOLDER)/,,$(OBFUSCATED_SREC))
+$(ARTIFACTS)/$(BUNDLE_FULL_NAME)_obfuscated_public_autoupdate.zip:  $(OBFUSCATED_OUT) $(OBFUSCATED_BOOTLOADER_OUT) $(BUNDLE_FILES) | $(ARTIFACTS)
+	cd $(FOLDER) &&	zip -r ../$@ $(subst $(FOLDER)/,,$(MOST_COMMON_BUNDLE_FILES)) $(subst $(FOLDER)/,,$(OBFUSCATED_SREC)) $(subst $(FOLDER)/,,$(OBFUSCATED_BOOTLOADER_SREC))
 
 .PHONY: bundle bundles autoupdate obfuscated bin hex dfu map elf list srec bootloader
 

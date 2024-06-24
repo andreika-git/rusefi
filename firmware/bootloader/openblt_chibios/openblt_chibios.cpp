@@ -14,8 +14,11 @@ void TimerReset() { }
 void CopService() { }
 void TimerUpdate() { }
 
-//static uint32_t _vector_ram[CORTEX_NUM_VECTORS] __attribute__ ((section (".vectors_ram")));
-static __attribute__((aligned(256))) uint32_t vector_ram[CORTEX_NUM_VECTORS];
+#ifndef SRAM_END
+#define SRAM_END (SRAM_BASE + 128*1024)
+#endif
+
+static volatile uint32_t vector_ram[CORTEX_NUM_VECTORS] __attribute__((aligned(1024)));
 extern uint32_t _vectors[];
 
 blt_bool is2ndBootloader(void) {
@@ -26,143 +29,122 @@ blt_bool is2ndBootloader(void) {
 	return (currentAddress >= OFFSET_AFTER_BOOTLOADER);
 }
 
-// relocate VTOR for the 2nd bootloader
-static void relVtorFor2ndBootloader(void) {
-	/*if (is2ndBootloader())*/ {
-	    // copy vector table into RAM
-	    for (uint32_t i = 0; i < CORTEX_NUM_VECTORS; i++) {
-	        vector_ram[i] = _vectors[i];
-			// relocate addresses for handlers in flash
-	        if (vector_ram[i] >= FLASH_BASE) {
-	        	vector_ram[i] += BOOTLOADER_SIZE;
-	        }
-	    }
-	    // reassign the vectors
-	    SCB->VTOR = (uint32_t)vector_ram;
-	}
+#define COPY_TABLE(flash_base, start, end, offset) \
+    asm volatile( \
+        "ldr r0, =" # flash_base "\n\t"       /* r0 = address of flash_base */ \
+        "ldr r1, =" # start "\n\t"       /* r1 = address of start */ \
+        "ldr r2, =" # end "\n\t"       /* r2 = address of end */ \
+        "add r0, r0, %0\n\t"    /* r0 = base_addr = flash_base + offset */ \
+        "add r1, r1, %0\n\t"    /* r1 = start + offset */ \
+        "add r2, r2, %0\n\t"    /* r2 = end + offset */ \
+        "1:\n\t"                /* Loop start label */ \
+        "ldr r3, [r0], #4\n\t" /* Load word from flash, increment r0 (load) */ \
+		/* Check if r3 is within the first range (%1..%2) */ \
+		"cmp r3, %1\n\t"       /* Compare r3 with lower bound */ \
+	    "blt 2f\n\t"           /* If r3 < lower bound, skip addition */ \
+	    "cmp r3, %2\n\t"       /* Compare r3 with upper bound */ \
+	    "bgt 2f\n\t"           /* If r3 > upper bound, skip addition */ \
+        "add r3, r3, %0\n\t"   /* Add offset to r3 */\
+        "b 3f\n\t"             /* Branch to the end of range checks */  \
+        /* Check if r3 is within the second range (%3..%4) */ \
+        "2:\n\t" \
+        "cmp r3, %3\n\t"          /* Compare r3 with lower bound of 2nd range */ \
+        "blt 3f\n\t"              /* If r3 < lower bound, skip addition */ \
+        "cmp r3, %4\n\t"          /* Compare r3 with upper bound of 2nd range */ \
+        "bgt 3f\n\t"              /* If r3 > upper bound, skip addition */ \
+        "add r3, r3, %0\n\t"      /* Add offset to r3 */ \
+        "3:\n\t"               \
+        "str r3, [r1], #4\n\t" /* Store word to RAM, increment r1 (start) */ \
+        "cmp r1, r2\n\t"       /* Compare start with end */ \
+        "blt 1b\n\t"           /* Branch to loop start if start < end */ \
+        :                       /* No output operands */ \
+        : "r" (offset), "r" (FLASH_BASE), "r" (FLASH_END), "r" (SRAM_BASE), "r" (SRAM_END) \
+        : "r0", "r1", "r2", "r3", "cc" /* Clobbered registers */ \
+    )
+
+static void initGot(uint32_t offset) {
+    // copy .got from flash to RAM and relocate
+    COPY_TABLE(__got_flash_base__, __got_start__, __got_end__, offset);
 }
 
-static void initGot(void) {
-	// Unfortunately we need asm to setup GOT because we cannot use global variables without GOT
-	asm volatile (
-        // Load current PC into r7
-        "mov r7, pc\n"
-
-        // Load constants into registers
-        "ldr r0, =%0\n"                // r0 = BOOTLOADER_SIZE
-        "ldr r1, =%1\n"                // r1 = OFFSET_AFTER_BOOTLOADER
-        "ldr r2, =%2\n"                // r2 = FLASH_BASE
-        "ldr r3, =__got_flash_base__\n"// r3 = Original GOT flash base
-
-        // Determine the GOT flash base address based on PC position
-        "cmp r7, r1\n"                 // Compare PC (r7) with OFFSET_AFTER_BOOTLOADER
-        "it hs\n"                      // If PC >= OFFSET_AFTER_BOOTLOADER
-        "addhs r3, r3, r0\n"           // Adjust r3 by adding BOOTLOADER_SIZE if PC >= OFFSET_AFTER_BOOTLOADER
-
-        // Determine the flash base value
-        "mov r6, #0xffffffff\n"        // Default value of flash_base (0xffffffff)
-        "cmp r7, r1\n"                 // Compare PC (r7) with OFFSET_AFTER_BOOTLOADER
-        "it hs\n"                       // If PC >= OFFSET_AFTER_BOOTLOADER
-        "movhs r6, r2\n"               // Set r6 = FLASH_BASE if PC >= OFFSET_AFTER_BOOTLOADER
-
-        // Load the start and end addresses of the GOT section in RAM
-        "ldr r4, =__got_start__\n"     // r4 = Start of GOT in RAM
-        "ldr r5, =__got_end__\n"       // r5 = End of GOT in RAM
-
-        // Copy loop: from flash (r3) to RAM (r4)
-        "1:\n"
-        "cmp r4, r5\n"                 // Compare r4 with r5
-        "bge 2f\n"                     // If r4 >= r5, exit the loop
-        "ldr r8, [r3], #4\n"           // Load 4 bytes from flash (r3) into r8, increment r3
-        "cmp r8, r6\n"                 // Compare loaded GOT entry (r8) with flash_base
-        "it hs\n"                      // If r8 >= flash_base
-        "addhs r8, r8, r0\n"           // Adjust GOT entry by adding BOOTLOADER_SIZE if r8 >= flash_base
-        "str r8, [r4], #4\n"           // Store 4 bytes from r8 into RAM (r4), increment r4
-        "b 1b\n"                       // Repeat the loop
-        "2:\n"
-                        
-        // Set global pointer to the start of the GOT 
-        "ldr r9, =__got_start__\n"
-        :
-        : "i" (BOOTLOADER_SIZE), "i" (OFFSET_AFTER_BOOTLOADER), "i" (FLASH_BASE)
-        : "r0", "r1", "r2", "r3", "r4", "r5", "r6", "r7", "r8", "memory"
-    );
+static void initGotPlt(uint32_t offset) {
+	// copy .got.plt from flash to RAM and relocate
+	COPY_TABLE(__got_plt_flash_base__, __got_plt_start__, __got_plt_end__, offset);
 }
 
-void threadInitHook(void *tp) {
-	// set GOT table for all thread contexts
-	asm volatile (
-        "ldr r9, =__got_start__\n"
-    );
-	asm("mov %0, r9" : "=r"(((thread_t *)tp)->ctx.sp->r9));
-}
-
-static void callConstructors(void) {
-	extern void (*__init_array_base__[])(void);
-	extern void (*__init_array_end__[])(void);
-
-	asm volatile (
-        // Load the base and end addresses of the constructors array
-        "ldr r4, %[init_array_base]\n"
-        "ldr r5, %[init_array_end]\n"
-
-        // Loop to call each constructor
-        "initloop:\n"
-        "cmp r4, r5\n"
-        "bge endinitloop\n"
-        "ldr r1, [r4], #4\n"
-
-        // Add bootloader size if address is greater than or equal to OFFSET_AFTER_BOOTLOADER
-        "ldr r2, =%[offset_after_bootloader]\n"
-        "cmp r1, r2\n"
-        "blt skip_bootloader_adjustment\n"
-        "add r1, r1, %[bootloader_size]\n"
-
-        "skip_bootloader_adjustment:\n"
-        "blx r1\n"
-        "b initloop\n"
-        
-        // End of the loop
-        "endinitloop:\n"
-        :
-        : [init_array_base] "m" (__init_array_base__),
-          [init_array_end] "m" (__init_array_end__),
-          [offset_after_bootloader] "i" (OFFSET_AFTER_BOOTLOADER),
-          [bootloader_size] "i" (BOOTLOADER_SIZE)
-        : "r1", "r2", "r4", "r5", "cc", "memory"
-    );
-}
-
-static void initData(void) {
+static void initData(uint32_t offset) {
 	// copy .data from flash to RAM and relocate
-    extern uint32_t __textdata_base__, __data_base__, __data_end__;
-    uint32_t textdata_base_addr = (uint32_t)&__textdata_base__;
-	uint32_t *data_load = (uint32_t *)(textdata_base_addr + (is2ndBootloader() ? BOOTLOADER_SIZE : 0));
-    uint32_t *data_start = &__data_base__;
-    uint32_t *data_end = &__data_end__;
-    while (data_start < data_end) {
-        *data_start++ = *data_load++;
+    COPY_TABLE(__textdata_base__, __data_base__, __data_end__, offset);
+}
+
+// relocate VTOR for the 2nd bootloader
+static void initVectorsInRam(uint32_t offset) {
+    __disable_irq();
+    // copy vector table into RAM
+    for (uint32_t i = 0; i < CORTEX_NUM_VECTORS; i++) {
+        vector_ram[i] = _vectors[i];
+		// relocate addresses for handlers in flash
+        /*if (vector_ram[i] >= FLASH_BASE && vector_ram[i] <= FLASH_END)*/ {
+        	vector_ram[i] += offset;
+        }
+	}
+    // reassign the vectors
+    SCB->VTOR = (uint32_t)vector_ram;
+    // don't call __enable_irq() yet
+}
+
+static void initBss(uint32_t offset) {
+	extern uint32_t __bss_base__;
+	extern uint32_t __bss_end__;
+    uint32_t *bss = (uint32_t *)((uint32_t)&__bss_base__ + offset);
+    uint32_t *bss_end = (uint32_t *)((uint32_t)&__bss_end__ + offset);
+
+    while (bss < bss_end) {
+        *bss++ = 0;
     }
 }
 
-extern void blink_led(void);
+static void callConstructors(uint32_t offset) {
+    extern uint32_t __init_array_base__;
+	extern uint32_t __init_array_end__;
+	typedef void (*init_func_t)(void);
+
+    init_func_t *func_ptr = (init_func_t *)&__init_array_base__;
+    init_func_t *func_end = (init_func_t *)&__init_array_end__;
+
+    while (func_ptr < func_end) {
+        // check if the constructor address is within the flash range
+        init_func_t ctor = *func_ptr;
+        /*if ((uint32_t)ctor >= FLASH_BASE && (uint32_t)ctor <= FLASH_END)*/ {
+            ctor = (init_func_t)((uint32_t)ctor + offset); // apply offset
+        }
+        ctor(); // Call the constructor function
+        func_ptr++;    // Move to the next constructor
+    }
+}
+
+extern "C" void blink_led(void);
 
 extern "C" void __core_init() {
+	uint32_t offset = is2ndBootloader() ? BOOTLOADER_SIZE : 0;
+	
 	// must be called ASAP
-	initGot();
-	// setup vectors
-	relVtorFor2ndBootloader();
+    initGot(offset);
+    initGotPlt(offset);
+    // copy data (CRT0_INIT_DATA=FALSE)
+	initData(offset);
+	// init bss section (CRT0_INIT_BSS=FALSE)
+	initBss(offset);
+	// setup vectors (CRT0_VTOR_INIT=FALSE)
+	initVectorsInRam(offset);
+	// call ctors (CRT0_CALL_CONSTRUCTORS=FALSE)
+	callConstructors(offset);
 
     // *** this is about specifically stm32f7 ***
 	// This overrides the built-in __core_init() function
 	// We do this to avoid enabling the D/I caches, which
 	// we'll immediately have to turn back off when jumping
 	// to the main firmware (which will then enable them itself)
-}
-
-extern "C" void __late_init_custom(void) {
-    initData();
-	callConstructors();
 }
 
 blt_int32u TimerGet() {

@@ -41,8 +41,10 @@ SECTIONS
   .isr_vector :
   {
     . = ALIGN(4);
+    __isr_vector_start = .;
     KEEP(*(.isr_vector)) /* Startup code */
     . = ALIGN(4);
+    __isr_vector_end = .;
   } >FLASH
 
   /* The program code and other data goes into FLASH */
@@ -101,6 +103,15 @@ SECTIONS
 
   /* used by the startup to initialize data */
   _sidata = LOADADDR(.data);
+
+  .vector_ram (NOLOAD):
+  {
+    __vector_ram_start__ = .;
+    . = ALIGN(4);
+    *(.vector_ram)
+    . = ALIGN(4);
+    __vector_ram_end__ = .;
+  } > RAM
 
   /* Initialized data sections goes into RAM, load LMA copy after code */
   .data : 

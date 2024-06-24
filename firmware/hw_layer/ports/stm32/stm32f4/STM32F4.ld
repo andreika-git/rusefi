@@ -33,6 +33,8 @@ SDRAM_SIZE = DEFINED(STM32_HAS_SDRAM) ? 8M : 0;
 bootloader_size = 32k;
 flash_start = 0x08000000 + (DEFINED(HAS_BOOTLOADER) ? bootloader_size : 0);
 flash_size = DEFINED(IS_BOOTLOADER) ? bootloader_size : 768k;
+ram0_size = DEFINED(IS_BOOTLOADER) ? (128k - bootloader_size) : 128k;
+ram1_size = DEFINED(IS_BOOTLOADER) ? (112k - bootloader_size) : 112k;
 image_size = DEFINED(HAS_BOOTLOADER) ? (flash_size - bootloader_size) : flash_size;
 
 /* OpenBLT <-> main FW shared area */
@@ -50,8 +52,8 @@ MEMORY
     flash6  : org = 0x00000000, len = 0
     flash7  : org = 0x00000000, len = 0
     shared  : org = 0x20000000, len = _OpenBLT_Shared_Params_Size
-    ram0    : org = 0x20000000 + _OpenBLT_Shared_Params_Size, len = 128k + RAM3_SIZE - _OpenBLT_Shared_Params_Size /* SRAM1 + SRAM2 + SRAM3 (optionally) */
-    ram1    : org = 0x20000000 + _OpenBLT_Shared_Params_Size, len = 112k - _OpenBLT_Shared_Params_Size      /* SRAM1 */
+    ram0    : org = 0x20000000 + _OpenBLT_Shared_Params_Size, len = ram0_size + RAM3_SIZE - _OpenBLT_Shared_Params_Size /* SRAM1 + SRAM2 + SRAM3 (optionally) */
+    ram1    : org = 0x20000000 + _OpenBLT_Shared_Params_Size, len = ram1_size - _OpenBLT_Shared_Params_Size /* SRAM1 */
     ram2    : org = 0x2001C000, len = 16k       /* SRAM2 */
     ram3    : org = 0x20020000, len = RAM3_SIZE /* SRAM3 note: this will be 0 size on F40x devices */
     ram4    : org = 0x10000000, len = 64k       /* CCM SRAM */
@@ -109,8 +111,9 @@ REGION_ALIAS("HEAP_RAM", ram0);
 /* RAM region to be used for SDRAM segment.*/
 REGION_ALIAS("SDRAM_RAM", ram7);
 
-/* Flash & RAM regions to be used for GOT.*/
-REGION_ALIAS("GOT_RAM", ram4);
+/* Flash & RAM regions to be used for VTOR & GOT.*/
+REGION_ALIAS("VECTORS_RAM", ram0);
+REGION_ALIAS("GOT_RAM", ram0);
 REGION_ALIAS("GOT_FLASH_LMA", flash0);
 
 SECTIONS
@@ -139,11 +142,25 @@ SECTIONS
   } > shared
 }
 
-/* Generic rules inclusion.*/
-INCLUDE rules.ld
+/* Stack rules inclusion.*/
+INCLUDE rules_stacks.ld
 
+/* Code rules inclusion.*/
+INCLUDE rules_code.ld
+
+/* Used by -fPIC compiler option, if enabled for bootloader */
+/* Must be declared after rules_code.ld but before rules_data 
+   since HEAP consumes all free RAM */
 SECTIONS
 {
+  .vectors_got_ram (NOLOAD) : ALIGN(1024)
+  {
+    . = ALIGN(1024);
+    _ram_vectors_start = .;
+    KEEP(*(.vectors_ram))
+    _ram_vectors_end = .;
+  } > VECTORS_RAM
+
   .got : ALIGN(4)
   {
     __got_flash_base__ = LOADADDR(.got);
@@ -151,4 +168,18 @@ SECTIONS
     *(.got)
     __got_end__ = .;
   } > GOT_RAM AT > GOT_FLASH_LMA
+
+  .got.plt : ALIGN(4)
+  {
+    __got_plt_flash_base__ = LOADADDR(.got.plt);
+    __got_plt_start__ = .;
+    *(.got.plt)
+    __got_plt_end__ = .;
+  } > GOT_RAM AT > GOT_FLASH_LMA
 }
+
+/* Data rules inclusion.*/
+INCLUDE rules_data.ld
+
+/* Memory rules inclusion.*/
+INCLUDE rules_memory.ld
