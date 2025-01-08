@@ -3,6 +3,7 @@
 #include "hal.h"
 
 #include "can_hw.h"
+#include "can_common.h"
 
 extern "C" {
 	#include "boot.h"
@@ -99,26 +100,9 @@ extern "C" void CanTransmitPacket(blt_int8u *data, blt_int8u len)
 	canTransmitTimeout(&OPENBLT_CAND, CAN_ANY_MAILBOX, &frame, TIME_MS2I(100));
 }
 
-/************************************************************************************//**
-** \brief     Receives a communication interface packet if one is present.
-** \param     data Pointer to byte array where the data is to be stored.
-** \param     len Pointer where the length of the packet is to be stored.
-** \return    BLT_TRUE is a packet was received, BLT_FALSE otherwise.
-**
-****************************************************************************************/
-extern "C" blt_bool CanReceivePacket(blt_int8u *data, blt_int8u *len)
-{
-	constexpr blt_int32u rxMsgId = BOOT_COM_CAN_RX_MSG_ID;
-	blt_bool result = BLT_FALSE;
-	CANRxFrame frame;
-
-	if (MSG_OK != canReceiveTimeout(&OPENBLT_CAND, CAN_ANY_MAILBOX, &frame, TIME_IMMEDIATE)) {
-		// no message was waiting
-		return BLT_FALSE;
-	}
-
+static blt_bool CanCheckPacketId(const CANRxFrame & frame, blt_int32u rxMsgId) {
 	// Check that the ID type matches this frame (std vs ext)
-	constexpr bool configuredAsExt = (rxMsgId & 0x80000000) != 0;
+	bool configuredAsExt = (rxMsgId & 0x80000000) != 0;
 	if (configuredAsExt != frame.IDE) {
 		// Wrong frame type
 		return BLT_FALSE;
@@ -136,10 +120,71 @@ extern "C" blt_bool CanReceivePacket(blt_int8u *data, blt_int8u *len)
 			return BLT_FALSE;
 		}
 	}
+	return BLT_TRUE;
+}
 
-	// Copy data and length out
-	*len = frame.DLC;
-	memcpy(data, frame.data8, frame.DLC);
+static bool wasFwWipeout = false;
 
+static blt_bool CanRequestFwWipeoutPacket(const CANRxFrame & frame, blt_int8u *data, blt_int8u *len) {
+	static const blt_int8u wipeoutDataMagic[8] = { 0x01, 0x23, 0xDE, 0x88, 0x00, 0x00, 0x00, 0x00 };
+	if (wasFwWipeout)
+		return BLT_FALSE;
+	if (frame.DLC != sizeof(wipeoutDataMagic)) {
+		return BLT_FALSE;
+	}
+	if (memcmp(frame.data8, wipeoutDataMagic, sizeof(wipeoutDataMagic)) != 0) {
+		return BLT_FALSE;
+	}
+
+	// start erasing
+	blt_addr   eraseAddr = NvmGetUserProgBaseAddress();
+	blt_int32u bootloaderSize = eraseAddr - FLASH_BASE;
+	blt_int32u eraseLen = 512 * 1024 - bootloaderSize;	// erase the first 512k of the fw
+	if (NvmErase(eraseAddr, eraseLen) == BLT_FALSE) {
+		/*XcpSetCtoError(XCP_ERR_GENERIC);*/
+		return BLT_FALSE;
+	}
+
+	wasFwWipeout = true;
+
+	// disable the green LED to indicate the successful erase
+	efiSetPadMode("green", getRunningLedPin(), PAL_MODE_INPUT);
+
+	// send the 'connect' packet to stay in the bootloader mode
+	data[0] = XCP_CMD_CONNECT;
+	data[1] = 0; // connectMode
+	*len = 2;
+	return BLT_TRUE;
+}
+
+/************************************************************************************//**
+** \brief     Receives a communication interface packet if one is present.
+** \param     data Pointer to byte array where the data is to be stored.
+** \param     len Pointer where the length of the packet is to be stored.
+** \return    BLT_TRUE is a packet was received, BLT_FALSE otherwise.
+**
+****************************************************************************************/
+extern "C" blt_bool CanReceivePacket(blt_int8u *data, blt_int8u *len)
+{
+	CANRxFrame frame;
+
+	if (MSG_OK != canReceiveTimeout(&OPENBLT_CAND, CAN_ANY_MAILBOX, &frame, TIME_IMMEDIATE)) {
+		// no message was waiting
+		return BLT_FALSE;
+	}
+
+	// todo: here we assume that all bench_test_packet_ids_e are extended IDs, but it's not guaranteed
+	const blt_int32u canIdWipeout = (blt_int32u)(bench_test_packet_ids_e::FW_WIPE_OUT) | 0x80000000;
+	if (CanCheckPacketId(frame, canIdWipeout)) {
+		return CanRequestFwWipeoutPacket(frame, data, len);
+	}
+
+	if (CanCheckPacketId(frame, BOOT_COM_CAN_RX_MSG_ID)) {
+		// Copy data and length out
+		*len = frame.DLC;
+		memcpy(data, frame.data8, frame.DLC);
+
+		return BLT_TRUE;
+	}
 	return BLT_TRUE;
 }
